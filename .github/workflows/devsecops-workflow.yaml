@@ -16,16 +16,14 @@ jobs:
 
       - run: npm install
 
-      # ✅ Updated SonarCloud step with v2 (bundles Java 17)
+      # Optional: run tests with coverage for SonarCloud
+      - run: npm test -- --coverage
+
       - name: SonarCloud Scan
         uses: sonarsource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: "https://sonarcloud.io"
-        with:
-          args: >
-            -Dsonar.organization=devsecopsganodejs
-            -Dsonar.projectKey=devsecopsganodejs
 
   security:
     runs-on: ubuntu-latest
