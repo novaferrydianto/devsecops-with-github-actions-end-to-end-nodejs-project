@@ -37,9 +37,11 @@ jobs:
     name: Run DAST scan on the web application
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           ref: master
+      - name: Pull ZAP Docker image
+        run: docker pull owasp/zap2docker-stable
       - name: ZAP Scan
         uses: zaproxy/action-baseline@v0.6.1
         with:
@@ -47,3 +49,6 @@ jobs:
           target: 'http://example.com/'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          issue_title: ZAP Scan Baseline Report
+          fail_action: false
+          allow_issue_writing: true
