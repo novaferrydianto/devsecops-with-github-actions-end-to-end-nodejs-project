@@ -53,9 +53,17 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'zaproxy/zap-stable'
-          target: 'http://example.com/' # Replace with your app URL
-          rules_file_name: '.zap/rules.tsv'
+          target: 'http://staging.example.com/' # Ganti dengan URL aplikasi
           cmd_options: '-a'
           issue_title: ZAP Scan Baseline Report
           fail_action: false
           allow_issue_writing: true
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
