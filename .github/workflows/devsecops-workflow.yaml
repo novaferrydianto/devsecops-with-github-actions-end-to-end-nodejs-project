@@ -193,6 +193,7 @@ jobs:
         continue-on-error: true
 
       - name: Ensure Valid SARIF Exists
+        shell: bash
         run: |
           echo "🔍 Checking snyk.sarif existence..."
           if [ ! -s snyk.sarif ]; then
