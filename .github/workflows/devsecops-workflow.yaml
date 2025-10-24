@@ -112,24 +112,26 @@ jobs:
     needs: sca_snyk
     continue-on-error: true
 
-    services:
-      app:
-        image: node:20-alpine
-        ports:
-          - 3000:3000
-        env:
-          NODE_ENV: production
-        options: >-
-          --name dast_app_service
-          --entrypoint sh
-        command: -c "npm ci && npm run build && npm start"
-
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Start Application in Background 🚀
+        run: |
+          nohup npm start &
+          sleep 10
+          echo "✅ App started successfully."
+
       - name: Wait for App Service (Healthcheck)
         run: |
-          echo "Waiting for app to start..."
+          echo "Waiting for app to be ready..."
           for i in {1..12}; do
             if curl -sSf http://localhost:3000 > /dev/null; then
               echo "✅ App is ready!"
