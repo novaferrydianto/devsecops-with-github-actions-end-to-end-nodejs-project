@@ -1,6 +1,8 @@
 name: Build code, run unit test, run SAST, SCA, DAST security scans for NodeJs App
 
-on: push
+on:
+  push:
+  pull_request:
 
 jobs:
   build:
@@ -45,13 +47,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-#        with:
-#          ref: master
 
       - name: Fix permissions
         run: sudo chmod -R 777 ${{ github.workspace }}
 
-      - name: ZAP Scan
+      - name: Run ZAP Baseline Scan
+        id: zap
         uses: zaproxy/action-baseline@v0.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -61,7 +62,6 @@ jobs:
           issue_title: 'ZAP Scan Baseline Report'
           fail_action: false
           allow_issue_writing: false
-          artifact_name: zap-scan  # ✅ fixed (no underscore)
         env:
           ZAP_DOCKER_EXTRA_ARGS: '--user root'
 
@@ -74,3 +74,21 @@ jobs:
             report_html.html
             report_md.md
             report_json.json
+
+      - name: Generate PR Comment Summary
+        if: always()
+        run: |
+          echo "### ⚡ OWASP ZAP Scan Summary" > zap_summary.md
+          echo "- Target: http://example.com/" >> zap_summary.md
+          echo "- Status: ✅ Scan completed" >> zap_summary.md
+          echo "- Warnings: $(grep -c 'WARN-NEW' report_md.md || echo 0)" >> zap_summary.md
+          echo "- Failures: $(grep -c 'FAIL-NEW' report_md.md || echo 0)" >> zap_summary.md
+          echo "" >> zap_summary.md
+          echo "📄 [Download full ZAP report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> zap_summary.md
+
+      - name: Comment ZAP Summary on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: zap_summary.md
+          recreate: true
