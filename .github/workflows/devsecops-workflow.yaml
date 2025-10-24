@@ -109,7 +109,7 @@ jobs:
         run: |
           if [ ! -s trufflehog-report.json ]; then
             echo "⚠️ TruffleHog report missing or empty — creating dummy report..."
-            echo '{"results": [], "summary": "No secrets found"}' > trufflehog-report.json
+            printf '{"results": [], "summary": "No secrets found"}\n' > trufflehog-report.json
           fi
 
       - name: Upload TruffleHog Report
@@ -197,23 +197,19 @@ jobs:
           echo "🔍 Checking snyk.sarif existence..."
           if [ ! -s snyk.sarif ]; then
             echo "⚠️ Snyk SARIF missing or empty, creating valid minimal SARIF file..."
-            cat <<'EOF' > snyk.sarif
-{
-  "version": "2.1.0",
-  "runs": [
-    {
-      "tool": {
-        "driver": {
-          "name": "Snyk CLI",
-          "informationUri": "https://snyk.io",
-          "rules": []
-        }
-      },
-      "results": []
-    }
-  ]
-}
-EOF
+            printf '%s\n' '{' \
+              '"version": "2.1.0",' \
+              '"runs": [{' \
+              '  "tool": {' \
+              '    "driver": {' \
+              '      "name": "Snyk CLI",' \
+              '      "informationUri": "https://snyk.io",' \
+              '      "rules": []' \
+              '    }' \
+              '  },' \
+              '  "results": []' \
+              '}]' \
+              '}' > snyk.sarif
           fi
 
       - name: Debug SARIF contents
