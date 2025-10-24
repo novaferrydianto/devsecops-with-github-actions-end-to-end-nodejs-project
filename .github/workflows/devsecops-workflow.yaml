@@ -127,32 +127,33 @@ jobs:
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SONAR_USER_HOME: /tmp/sonar  # avoids embedded runtime unpacking issues
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 👇 temporarily switch only this job to Node 20
+      - name: Setup Node 20 for Sonar
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
       - name: Validate Test Reports
         run: |
-          echo "🧾 Checking for test and coverage reports..."
+          echo "Checking test & coverage reports..."
           if [ ! -f unit-test.xml ]; then
-            echo "⚠️ unit-test.xml missing — creating dummy for SonarCloud"
             echo '<testExecutions version="1"></testExecutions>' > unit-test.xml
-          else
-            echo "🔧 Normalizing version format..."
-            sed -i 's/version="1.0"/version="1"/g' unit-test.xml || true
           fi
-
           if [ ! -f coverage/lcov.info ]; then
-            echo "⚠️ coverage/lcov.info missing — creating empty coverage file"
             mkdir -p coverage && echo 'TN:' > coverage/lcov.info
           fi
-          echo "✅ Ready to run SonarCloud scan"
 
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2.1.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_SCANNER_OPTS: "-Dsonar.nodejs.executable=node"
         with:
           args: >
             -Dsonar.organization=devsecopsganodejs
