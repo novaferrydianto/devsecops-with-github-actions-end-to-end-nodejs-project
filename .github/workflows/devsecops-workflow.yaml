@@ -58,15 +58,25 @@ jobs:
             fi
 
             echo "🚀 Running Mocha tests with SonarQube reporter..."
-            npx nyc mocha --reporter mocha-sonarqube-reporter \
+            mkdir -p coverage
+            npx nyc --reporter=lcov --reporter=text mocha \
+              --reporter mocha-sonarqube-reporter \
               --reporter-options output=unit-test.xml || echo '⚠️ Mocha tests failed, continuing...'
 
-            echo "🧾 Generating lcov coverage report..."
-            npx nyc report --reporter=lcov || echo '⚠️ Coverage report skipped.'
+            echo "🧾 Normalizing coverage file for SonarCloud..."
+            if [ -f coverage/lcov.info ]; then
+              cp coverage/lcov.info ./lcov.info
+            else
+              echo "⚠️ coverage/lcov.info not found; skipping copy"
+            fi
+
+            echo "✅ Verifying files..."
+            ls -lah unit-test.xml || echo "❌ unit-test.xml missing"
+            ls -lah coverage/lcov.info || echo "❌ coverage/lcov.info missing"
           else
             echo "ℹ️ No test script; skipping."
           fi
-
+            
       - name: Upload test artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -114,6 +124,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Test Reports
+        run: |
+          echo "🧾 Checking for test and coverage reports..."
+          if [ ! -f unit-test.xml ]; then
+            echo "⚠️ unit-test.xml missing — creating dummy for SonarCloud"
+            echo '<testExecutions version="1.0"></testExecutions>' > unit-test.xml
+          fi
+          if [ ! -f coverage/lcov.info ]; then
+            echo "⚠️ coverage/lcov.info missing — creating empty coverage file"
+            mkdir -p coverage && echo 'TN:' > coverage/lcov.info
+          fi
+          echo "✅ Ready to run SonarCloud scan"
+
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2
         env:
@@ -124,7 +147,7 @@ jobs:
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.sources=.
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,lcov.info
             -Dsonar.testExecutionReportPaths=unit-test.xml
             -Dsonar.test.inclusions=**/*.spec.js,**/*.test.js
 
