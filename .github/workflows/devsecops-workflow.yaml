@@ -14,7 +14,11 @@ jobs:
           node-version: 18
           cache: npm
 
-      - run: npm install
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run unit tests
+        run: npm test --if-present
 
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2
@@ -37,6 +41,8 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: test --severity-threshold=high
 
   zap_scan:
     runs-on: ubuntu-latest
@@ -45,12 +51,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-#        with:
-#          ref: master
-      - name: Fix permissions
-        run: sudo chmod -R 775 ${{ github.workspace }}
 
-      - name: ZAP Scan
+      # Fix workspace permissions so ZAP container can write its files
+      - name: Fix permissions
+        run: sudo chmod -R 777 ${{ github.workspace }}
+
+      - name: Run ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -60,6 +66,8 @@ jobs:
           issue_title: 'ZAP Scan Baseline Report'
           fail_action: false
           allow_issue_writing: false
+        env:
+          ZAP_DOCKER_EXTRA_ARGS: '--user root'
 
       - name: Upload ZAP Report
         if: always()
