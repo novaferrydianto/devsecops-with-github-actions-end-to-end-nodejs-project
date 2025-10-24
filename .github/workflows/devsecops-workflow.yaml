@@ -56,5 +56,5 @@ jobs:
       - name: Run OWASP ZAP Full Scan
         run: |
           docker run -v $(pwd):/zap/wrk/:rw --network host --rm -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-full-scan.py -t http://192.168.0.12:3001 -g gen.conf -r reportzapfull.html -x reportzapfull.xml
+            zap-full-scan.py -t http://example.com -g gen.conf -r reportzapfull.html -x reportzapfull.xml
           zip zap-report.zip reportzapfull.html reportzapfull.xml
