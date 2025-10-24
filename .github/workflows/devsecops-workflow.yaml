@@ -4,7 +4,7 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: '0 3 * * 0' # Optional: weekly Sunday auto security scan
+    - cron: '0 3 * * 0' # Weekly Sunday auto security scan
 
 permissions:
   contents: read
@@ -47,14 +47,82 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-  dast_zap:
-    name: DAST Scan with OWASP ZAP
+  zap_baseline:
+    name: DAST Baseline Scan (Passive)
     runs-on: ubuntu-latest
     needs: security
     continue-on-error: true
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        id: zap_baseline
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          docker_name: 'zaproxy/zap-stable'
+          target: ${{ secrets.TARGET_URL }}
+          cmd_options: '-a'
+          issue_title: 'ZAP Baseline Report'
+          fail_action: false
+          allow_issue_writing: false
+        env:
+          ZAP_DOCKER_EXTRA_ARGS: '--user root'
+
+      - name: Upload ZAP Baseline Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
+
+      - name: Comment ZAP Baseline Summary on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: report_md.md
+          recreate: true
+
+  zap_fullscan:
+    name: DAST Full Scan (Active)
+    runs-on: ubuntu-latest
+    needs: zap_baseline
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Run OWASP ZAP Full Scan
         run: |
           docker run -v $(pwd):/zap/wrk/:rw --network host --rm -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-full-scan.py -t http://example.com -g gen.conf -r reportzapfull.html -x reportzapfull.xml
+            zap-full-scan.py -t ${{ secrets.TARGET_URL }} -g gen.conf -r reportzapfull.html -x reportzapfull.xml || true
           zip zap-report.zip reportzapfull.html reportzapfull.xml
+
+      - name: Upload ZAP Full Scan Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-fullscan-report
+          path: |
+            reportzapfull.html
+            reportzapfull.xml
+            zap-report.zip
+
+      - name: Generate ZAP Summary
+        if: always()
+        run: |
+          echo "### ⚡ OWASP ZAP Full Scan Summary" > zap_summary.md
+          echo "- Target: ${{ secrets.TARGET_URL }}" >> zap_summary.md
+          echo "- Date: $(date)" >> zap_summary.md
+          echo "" >> zap_summary.md
+          echo "📄 [View Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> zap_summary.md
+
+      - name: Comment ZAP Full Scan Summary on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: zap_summary.md
+          recreate: true
