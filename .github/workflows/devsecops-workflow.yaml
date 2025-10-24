@@ -1,12 +1,6 @@
 name: Build code, run unit test, run SAST, SCA, DAST security scans for NodeJs App
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+on: push
 
 jobs:
   build:
@@ -30,7 +24,6 @@ jobs:
           args: >
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
-            
   security:
     runs-on: ubuntu-latest
     needs: build
