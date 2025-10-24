@@ -25,7 +25,7 @@ jobs:
   secrets_scan:
     name: TruffleHog Secret Scan
     # Use self-hosted if you actually have trufflehog preinstalled; otherwise switch to ubuntu-latest + docker
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
