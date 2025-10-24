@@ -1,12 +1,6 @@
 name: Build code, run unit test, run SAST, SCA, DAST security scans for NodeJs App
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+on: push
 
 jobs:
   build:
@@ -15,9 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: 18
           cache: npm
 
       - run: npm install
@@ -49,7 +43,7 @@ jobs:
     name: Run DAST scan on the web application
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           ref: master
 
