@@ -139,11 +139,11 @@ jobs:
           if [ -n "${{ secrets.DAST_PROD_URL }}" ]; then
             echo "url=${{ secrets.DAST_PROD_URL }}" >> "$GITHUB_OUTPUT"
           else
-            echo "url=http://localhost:3000" >> "$GITHUB_OUTPUT"
+            echo "url=http://example.com" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Start App (only if scanning localhost)
-        if: steps.target.outputs.url == 'http://localhost:3000'
+        if: steps.target.outputs.url == 'http://example.com'
         run: |
           npm run build --if-present
           npm run start &
