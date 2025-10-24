@@ -47,64 +47,14 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-  zap_scan:
+  dast_zap:
+    name: DAST Scan with OWASP ZAP
     runs-on: ubuntu-latest
     needs: security
-    name: Run DAST scan on the web application
+    continue-on-error: true
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Fix permissions
-        run: sudo chmod -R 777 ${{ github.workspace }}
-
-      - name: Run ZAP Baseline Scan
-        id: zap
-        uses: zaproxy/action-baseline@v0.11.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          docker_name: 'zaproxy/zap-stable'
-          target: 'http://example.com/' # Ganti dengan URL aplikasi kamu
-          cmd_options: '-a'
-          issue_title: 'ZAP Scan Baseline Report'
-          fail_action: false
-          allow_issue_writing: false
-        env:
-          ZAP_DOCKER_EXTRA_ARGS: '--user root'
-
-      - name: Upload ZAP Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: |
-            report_html.html
-            report_md.md
-            report_json.json
-
-      - name: Generate Conditional PR Comment Summary
-        id: zap_summary
-        if: always()
+      - name: Run OWASP ZAP Full Scan
         run: |
-          WARNINGS=$(grep -c 'WARN-NEW' report_md.md || echo 0)
-          FAILS=$(grep -c 'FAIL-NEW' report_md.md || echo 0)
-          echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
-          echo "fails=$FAILS" >> $GITHUB_OUTPUT
-
-          if [ "$WARNINGS" -gt 0 ] || [ "$FAILS" -gt 0 ]; then
-            echo "### ⚠️ OWASP ZAP Findings Detected" > zap_summary.md
-            echo "- Target: http://example.com/" >> zap_summary.md
-            echo "- Warnings: $WARNINGS" >> zap_summary.md
-            echo "- Fails: $FAILS" >> zap_summary.md
-            echo "" >> zap_summary.md
-            echo "📄 [Download full ZAP report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> zap_summary.md
-          else
-            echo "### ✅ No OWASP ZAP findings detected" > zap_summary.md
-          fi
-
-      - name: Comment ZAP Summary on PR
-        if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          path: zap_summary.md
-          recreate: true
+          docker run -v $(pwd):/zap/wrk/:rw --network host --rm -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py -t http://192.168.0.12:3001 -g gen.conf -r reportzapfull.html -x reportzapfull.xml
+          zip zap-report.zip reportzapfull.html reportzapfull.xml
