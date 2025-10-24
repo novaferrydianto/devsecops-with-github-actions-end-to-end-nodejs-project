@@ -1,6 +1,12 @@
-name: Build code, run unit test, run SAST, SCA, DAST security scans for NodeJs App
+name: Build code, run unit test, run SAST, SCA, DAST, and Secret Scans for NodeJs App
 
-on: push
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -24,6 +30,7 @@ jobs:
           args: >
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
+            
   security:
     runs-on: ubuntu-latest
     needs: build
@@ -37,9 +44,41 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
+  trufflehog_scan:
+    name: TruffleHog Secret Scan
+    runs-on: self-hosted
+    needs: security
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install TruffleHog
+        run: |
+          echo "Installing TruffleHog..."
+          pip install trufflehog
+
+      - name: Run TruffleHog Scan
+        run: |
+          echo "Running TruffleHog secret scan..."
+          trufflehog filesystem . \
+            --exclude-paths trufflehog-excluded-paths.txt \
+            --no-update \
+            --fail \
+            --json > trufflehog-report.json
+          echo "===== TruffleHog Report ====="
+          cat trufflehog-report.json
+
+      - name: Upload TruffleHog Report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trufflehog-report
+          path: trufflehog-report.json
+
   zap_scan:
     runs-on: ubuntu-latest
-    needs: security
+    needs: trufflehog_scan
     name: Run DAST scan on the web application
     steps:
       - name: Checkout
@@ -52,7 +91,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'zaproxy/zap-stable'
-          target: 'http://example.com/' # Ganti dengan URL aplikasi
+          target: 'http://example.com/' # Ganti dengan URL aplikasi kamu
           cmd_options: '-a'
           issue_title: ZAP Scan Baseline Report
           fail_action: false
