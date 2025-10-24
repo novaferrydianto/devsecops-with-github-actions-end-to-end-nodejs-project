@@ -3,11 +3,18 @@ name: Build code, run unit test, run SAST, SCA, DAST security scans for NodeJs A
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 3 * * 0' # Optional: weekly Sunday auto security scan
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Run unit tests and SAST scan on the source code 
+    name: Run unit tests and SAST scan on the source code
     steps:
       - uses: actions/checkout@v4
 
@@ -27,15 +34,39 @@ jobs:
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
 
-  security:
+  codeql:
     runs-on: ubuntu-latest
     needs: build
+    name: Run GitHub Advanced Security (CodeQL)
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  security:
+    runs-on: ubuntu-latest
+    needs: codeql
     name: Run the SCA scan on the source code
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@b23dceaa7cb50bfb9697f078c16d52f4d0f4d9c5
+        uses: snyk/actions-node@04f4b9986a661aaee2f60b07c46493c69b5f7f9d
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -75,16 +106,25 @@ jobs:
             report_md.md
             report_json.json
 
-      - name: Generate PR Comment Summary
+      - name: Generate Conditional PR Comment Summary
+        id: zap_summary
         if: always()
         run: |
-          echo "### ⚡ OWASP ZAP Scan Summary" > zap_summary.md
-          echo "- Target: http://example.com/" >> zap_summary.md
-          echo "- Status: ✅ Scan completed" >> zap_summary.md
-          echo "- Warnings: $(grep -c 'WARN-NEW' report_md.md || echo 0)" >> zap_summary.md
-          echo "- Failures: $(grep -c 'FAIL-NEW' report_md.md || echo 0)" >> zap_summary.md
-          echo "" >> zap_summary.md
-          echo "📄 [Download full ZAP report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> zap_summary.md
+          WARNINGS=$(grep -c 'WARN-NEW' report_md.md || echo 0)
+          FAILS=$(grep -c 'FAIL-NEW' report_md.md || echo 0)
+          echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+          echo "fails=$FAILS" >> $GITHUB_OUTPUT
+
+          if [ "$WARNINGS" -gt 0 ] || [ "$FAILS" -gt 0 ]; then
+            echo "### ⚠️ OWASP ZAP Findings Detected" > zap_summary.md
+            echo "- Target: http://example.com/" >> zap_summary.md
+            echo "- Warnings: $WARNINGS" >> zap_summary.md
+            echo "- Fails: $FAILS" >> zap_summary.md
+            echo "" >> zap_summary.md
+            echo "📄 [Download full ZAP report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> zap_summary.md
+          else
+            echo "### ✅ No OWASP ZAP findings detected" > zap_summary.md
+          fi
 
       - name: Comment ZAP Summary on PR
         if: github.event_name == 'pull_request'
