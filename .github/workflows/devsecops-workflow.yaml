@@ -132,10 +132,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20 for Sonar
+      - name: Setup Node for Sonar
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: ${{ env.NODE_VERSION }}
+
+      # 👇 Fix SonarJS "Provided Node.js executable file does not exist"
+      - name: Ensure Node.js binary available for SonarJS
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y nodejs npm
+          which node && node -v
 
       - name: Validate Test Reports
         run: |
