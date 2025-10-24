@@ -53,7 +53,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'zaproxy/zap-stable'
-          target: 'http://staging.example.com/' # Ganti dengan URL aplikasi
+          target: 'http://example.com/' # Ganti dengan URL aplikasi
           cmd_options: '-a'
           issue_title: ZAP Scan Baseline Report
           fail_action: false
