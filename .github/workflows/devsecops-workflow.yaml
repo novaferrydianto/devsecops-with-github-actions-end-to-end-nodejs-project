@@ -15,7 +15,7 @@ permissions:
   actions: read
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '20.x' # Sudah di-update ke 20.x
   TARGET_URL: 'http://example.com/' # Replace with your app URL
 
 jobs:
@@ -65,7 +65,8 @@ jobs:
 
             echo "🧾 Normalizing coverage file for SonarCloud..."
             if [ -f coverage/lcov.info ]; then
-              cp coverage/lcov.info ./lcov.info
+              # Menyalin lcov.info ke root untuk memudahkan akses SonarCloud
+              cp coverage/lcov.info ./lcov.info 
             else
               echo "⚠️ coverage/lcov.info not found; skipping copy"
             fi
@@ -127,49 +128,65 @@ jobs:
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SONAR_USER_HOME: /tmp/sonar
+      # SONAR_USER_HOME disetel untuk menghindari masalah izin atau cache
+      SONAR_USER_HOME: /tmp/sonar 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+        
+      # 💡 PENTING: Langkah ini mengatasi Error 'ClassNotFoundException: node'
       - name: Setup Node for Sonar
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      # 👇 Fix SonarJS "Provided Node.js executable file does not exist" and "toReversed" error
-      - name: Force Node 20 for SonarJS runtime
+      
+      # ⚠️ PENTING: Solusi tambahan jika Sonar Scanner tidak menemukan executable Node
+      - name: Set Node Executable Path for SonarScanner
+        id: node_path
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y nodejs npm
-          echo "Node runtime:"
-          which node
-          node -v
-
-      - name: Validate Test Reports
+          NODE_EXEC=$(which node)
+          echo "SONAR_SCANNER_OPTS=-Dsonar.nodejs.executable=${NODE_EXEC}" >> $GITHUB_ENV
+          echo "✅ Node path set: ${NODE_EXEC}"
+      
+      # ⚠️ PENTING: Mendapatkan Artifact (unit-test.xml & lcov.info)
+      - name: Download test reports artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: junit-or-coverage
+          path: .
+          
+      # File lcov.info berada di root karena job build_test memindahkannya
+      # Namun, file unit-test.xml mungkin perlu dipindahkan jika SonarCloud tidak menemukannya
+      - name: Verify and Setup Report Locations
         run: |
-          echo "Checking test & coverage reports..."
+          echo "ls -la di working directory:"
+          ls -la
+          # Pastikan lcov.info ada (disalin di job build_test)
+          if [ ! -f lcov.info ]; then
+              echo "⚠️ lcov.info missing. Creating dummy."
+              echo 'TN:' > lcov.info
+          fi
+          # Pastikan unit-test.xml ada
           if [ ! -f unit-test.xml ]; then
-            echo '<testExecutions version="1"></testExecutions>' > unit-test.xml
+              echo "⚠️ unit-test.xml missing. Creating dummy."
+              echo '<testExecutions version="1"></testExecutions>' > unit-test.xml
           fi
-          if [ ! -f coverage/lcov.info ]; then
-            mkdir -p coverage && echo 'TN:' > coverage/lcov.info
-          fi
+          echo "✅ Reports are ready."
 
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2.1.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_USER_HOME: /tmp/sonar
-          SONAR_SCANNER_OPTS: "-Dsonar.nodejs.executable=$(which node)"
+          # Menggunakan variabel lingkungan yang disetel di langkah 'Set Node Executable Path'
+          SONAR_SCANNER_OPTS: ${{ env.SONAR_SCANNER_OPTS }} 
         with:
           args: >
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.sources=.
-            -Dsonar.javascript.node.maxspace=4096
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,lcov.info
+            -Dsonar.javascript.node.maxspace=4096 # Opsional: Menambah memori jika scan besar
+            -Dsonar.javascript.lcov.reportPaths=lcov.info # Menggunakan lcov.info di root
             -Dsonar.testExecutionReportPaths=unit-test.xml
             -Dsonar.test.inclusions=**/*.spec.js,**/*.test.js
 
