@@ -70,7 +70,7 @@ jobs:
 
       - name: Run Snyk Vulnerability Scan
         uses: snyk/actions/node@3.1.0
-        continue-on-error: true # Allow scan to complete even if vulnerabilities found
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -119,8 +119,10 @@ jobs:
           - 3000:3000
         env:
           NODE_ENV: production
-        command: >
-          sh -c "npm ci && npm run build && npm start"
+        options: >-
+          --name dast_app_service
+          --entrypoint sh
+        command: -c "npm ci && npm run build && npm start"
 
     steps:
       - uses: actions/checkout@v4
