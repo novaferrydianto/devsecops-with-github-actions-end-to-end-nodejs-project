@@ -149,7 +149,7 @@ jobs:
           echo "✅ Ready to run SonarCloud scan"
 
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@v2
+        uses: sonarsource/sonarcloud-github-action@v2.1.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -195,9 +195,9 @@ jobs:
       - name: Ensure Valid SARIF Exists
         shell: bash
         run: |
-          echo "🔍 Checking snyk.sarif existence..."
+          echo "Checking snyk.sarif existence..."
           if [ ! -s snyk.sarif ]; then
-            echo "⚠️ Snyk SARIF missing or empty, creating valid minimal SARIF file..."
+            echo "Snyk SARIF missing or empty, creating valid minimal SARIF file..."
             echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Snyk CLI","informationUri":"https://snyk.io","rules":[]}},"results":[]}]} ' > snyk.sarif
           fi
 
