@@ -15,7 +15,7 @@ permissions:
   actions: read
 
 env:
-  NODE_VERSION: '18.x'
+  NODE_VERSION: '20.x'
   TARGET_URL: 'http://example.com/' # Replace with your app URL
 
 jobs:
