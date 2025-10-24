@@ -137,12 +137,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # 👇 Fix SonarJS "Provided Node.js executable file does not exist"
-      - name: Ensure Node.js binary available for SonarJS
+      # 👇 Fix SonarJS "Provided Node.js executable file does not exist" and "toReversed" error
+      - name: Force Node 20 for SonarJS runtime
         run: |
           sudo apt-get update -y
           sudo apt-get install -y nodejs npm
-          which node && node -v
+          echo "Node runtime:"
+          which node
+          node -v
 
       - name: Validate Test Reports
         run: |
@@ -160,6 +162,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_USER_HOME: /tmp/sonar
+          SONAR_SCANNER_OPTS: "-Dsonar.nodejs.executable=$(which node)"
         with:
           args: >
             -Dsonar.organization=devsecopsganodejs
@@ -206,7 +209,23 @@ jobs:
           echo "Checking snyk.sarif existence..."
           if [ ! -s snyk.sarif ]; then
             echo "Snyk SARIF missing or empty, creating valid minimal SARIF file..."
-            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Snyk CLI","informationUri":"https://snyk.io","rules":[]}},"results":[]}]} ' > snyk.sarif
+            cat <<'EOF' > snyk.sarif
+            {
+              "version": "2.1.0",
+              "runs": [
+                {
+                  "tool": {
+                    "driver": {
+                      "name": "Snyk CLI",
+                      "informationUri": "https://snyk.io",
+                      "rules": []
+                    }
+                  },
+                  "results": []
+                }
+              ]
+            }
+            EOF
           fi
 
       - name: Debug SARIF contents
