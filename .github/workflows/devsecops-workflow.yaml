@@ -127,12 +127,11 @@ jobs:
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SONAR_USER_HOME: /tmp/sonar  # avoids embedded runtime unpacking issues
+      SONAR_USER_HOME: /tmp/sonar
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 👇 temporarily switch only this job to Node 20
       - name: Setup Node 20 for Sonar
         uses: actions/setup-node@v4
         with:
@@ -153,7 +152,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_SCANNER_OPTS: "-Dsonar.nodejs.executable=node"
+          SONAR_SCANNER_OPTS: "-Dsonar.nodejs.executable=$(which node)"
         with:
           args: >
             -Dsonar.organization=devsecopsganodejs
