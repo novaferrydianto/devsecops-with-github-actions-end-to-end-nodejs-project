@@ -1,17 +1,18 @@
 /**
  * Created by alicia.sykes on 24/08/2015.
- * Updated by Nova Ferrydianto (DevSecOps version)
+ * Updated for modern Node.js (ESM + DevSecOps)
  */
 
 import 'colors';
 import { fetchWeather } from './fetch-weather.js';
 import * as prepareForWeather from './prepared-for-the-weather.js';
 import commandLineArgs from 'command-line-args';
+import http from 'http';
 
-const cli = commandLineArgs([
+const options = commandLineArgs([
   { name: 'location', alias: 'l', type: String, defaultValue: 'London' }
 ]);
-const location = cli.parse().location;
+const location = options.location;
 
 // Fetch weather data
 fetchWeather(location)
@@ -27,7 +28,7 @@ fetchWeather(location)
       printLine(item.value, item.name);
     }
 
-    // ✅ Start simple HTTP server for ZAP scan
+    // ✅ Start a simple HTTP server for DAST/ZAP scans
     startServer();
   })
   .catch((err) => {
@@ -35,14 +36,13 @@ fetchWeather(location)
     process.exit(1);
   });
 
-// Prints console line with icons
+// Pretty console output
 function printLine(required, text) {
   if (required) console.log(`${String.fromCharCode(10004)} ${text}`.green);
   else console.log(`${String.fromCharCode(10006)} ${text}`.red);
 }
 
-// ✅ Lightweight HTTP server (for DAST)
-import http from 'http';
+// Simple HTTP server for ZAP scan
 function startServer() {
   const PORT = process.env.PORT || 3000;
   const server = http.createServer((req, res) => {
