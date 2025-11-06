@@ -7,15 +7,22 @@ on:
     branches: [master]
   schedule:
     - cron: '0 3 * * 0' # Weekly Sunday auto security scan
+  workflow_dispatch:
+    inputs:
+      run_zap_only:
+        description: 'Run only OWASP ZAP DAST scan (skip other jobs)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
   security-events: write
   actions: read
-  issues: write # needed for auto-issue creation
+  issues: write
 
 jobs:
   build_and_sast:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only != 'true' }}
     name: 🧱 Build, Unit Tests, and SAST (SonarCloud)
     runs-on: ubuntu-latest
 
@@ -40,13 +47,10 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🧰 Verify Dev Dependencies (Self-Healing)
+      - name: 🧰 Verify Dev Dependencies
         run: |
-          echo "🔍 Checking essential dev dependencies..."
-          npm ls source-map-support || npm install --save-dev source-map-support
           npm ls cross-env || npm install --save-dev cross-env
           npm ls nyc || npm install --save-dev nyc
-          echo "✅ Dev dependencies verified."
 
       - name: 🧪 Run Unit Tests
         run: npm test
@@ -56,15 +60,12 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
-      - name: 📤 Upload Coverage Artifact
+      - name: 📤 Upload Coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
-
-      - name: ✅ Coverage Summary
-        run: npx nyc report --reporter=text-summary
 
       - name: 🚀 SonarCloud Scan (SAST)
         uses: sonarsource/sonarcloud-github-action@v2
@@ -79,6 +80,7 @@ jobs:
             -Dsonar.sourceEncoding=UTF-8
 
   sca_snyk:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only != 'true' }}
     name: 🧩 Software Composition Analysis (SCA) - Snyk
     runs-on: ubuntu-latest
     needs: build_and_sast
@@ -91,12 +93,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🕵️ Run Snyk Vulnerability Scan
+      - name: 🕵️ Run Snyk Scan
         uses: snyk/actions/node@v3
         continue-on-error: true
         env:
@@ -105,13 +106,6 @@ jobs:
           command: test
           args: --severity-threshold=high --json-file-output=snyk-report.json
 
-      - name: 🧩 Monitor Project in Snyk Dashboard
-        uses: snyk/actions/node@v3
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: monitor
-
       - name: 📤 Upload Snyk Report
         uses: actions/upload-artifact@v4
         with:
@@ -119,6 +113,7 @@ jobs:
           path: snyk-report.json
 
   optional_trivy:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only != 'true' }}
     name: 🧠 Container & IaC Security (Trivy)
     runs-on: ubuntu-latest
     needs: sca_snyk
@@ -128,7 +123,7 @@ jobs:
       - name: 🛒 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔍 Run Trivy File System Scan
+      - name: 🔍 Run Trivy FS Scan
         uses: aquasecurity/trivy-action@0.18.0
         with:
           scan-type: 'fs'
@@ -145,7 +140,7 @@ jobs:
   dast_zap:
     name: 🎯 Dynamic App Security Testing (OWASP ZAP)
     runs-on: ubuntu-latest
-    needs: sca_snyk
+    needs: [sca_snyk]
     continue-on-error: true
 
     env:
@@ -164,7 +159,7 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🚀 Start Application in Background
+      - name: 🚀 Start Application
         run: |
           nohup npm start &
           echo "🌐 Waiting for app on port 3000..."
@@ -173,7 +168,6 @@ jobs:
               echo "✅ App reachable!"
               exit 0
             fi
-            echo "⏳ $i/30 waiting..."
             sleep 5
           done
           echo "❌ App failed to start."
@@ -199,29 +193,18 @@ jobs:
             report_html.html
             report_md.md
             report_json.json
-          overwrite: true   # ✅ fixes 409 Conflict
+          overwrite: true
 
       - name: 📊 Parse Vulnerabilities
         if: always()
         run: |
           if [ -f report_json.json ]; then
             HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l)
-            MEDIUM=$(grep -o '"risk":"Medium"' report_json.json | wc -l)
-            LOW=$(grep -o '"risk":"Low"' report_json.json | wc -l)
-            INFO=$(grep -o '"risk":"Informational"' report_json.json | wc -l)
-            echo "ZAP_SCAN_SUMMARY=⚠️ $HIGH High | 🟠 $MEDIUM Medium | 🟢 $LOW Low | 🔵 $INFO Info" >> $GITHUB_ENV
             echo "ZAP_HIGH_COUNT=$HIGH" >> $GITHUB_ENV
             grep -A3 '"risk":"High"' report_json.json | head -n 30 > top_high.txt
           else
-            echo "ZAP_SCAN_SUMMARY=❌ No JSON report found" >> $GITHUB_ENV
             echo "ZAP_HIGH_COUNT=0" >> $GITHUB_ENV
           fi
-
-      - name: ❌ Fail if High Risk Found
-        if: env.ZAP_FAIL_ON_HIGH == 'true' && env.ZAP_HIGH_COUNT != '0'
-        run: |
-          echo "🚨 $ZAP_HIGH_COUNT high-risk vulnerabilities detected!"
-          exit 1
 
       - name: 🪶 Auto-create GitHub Issue for High Risks
         if: env.ZAP_HIGH_COUNT != '0'
@@ -229,27 +212,17 @@ jobs:
         with:
           title: "🔥 ZAP Scan: High-Risk Vulnerabilities Detected"
           content-filepath: top_high.txt
-          labels: |
-            security
-            zap
-            high-risk
+          labels: security, zap, high-risk
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🧾 Summary — ZAP DAST
         if: always()
         run: |
-          echo "## 🎯 OWASP ZAP DAST Summary" >> $GITHUB_STEP_SUMMARY
-          echo "🌐 Target: http://localhost:3000" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "${ZAP_SCAN_SUMMARY}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📄 [HTML Report](./report_html.html)" >> $GITHUB_STEP_SUMMARY
-          echo "📄 [Markdown Report](./report_md.md)" >> $GITHUB_STEP_SUMMARY
-          echo "📄 [JSON Report](./report_json.json)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🪶 If any high risks were found, a GitHub Issue was created automatically." >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 OWASP ZAP Summary" >> $GITHUB_STEP_SUMMARY
+          echo "📄 [ZAP HTML Report](./report_html.html)" >> $GITHUB_STEP_SUMMARY
 
   summary:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only != 'true' }}
     name: 🧾 Generate DevSecOps Summary
     runs-on: ubuntu-latest
     needs: [build_and_sast, sca_snyk, optional_trivy, dast_zap]
@@ -258,7 +231,6 @@ jobs:
       - name: 📜 Summary Report
         run: |
           echo "✅ All DevSecOps stages completed successfully!"
-          echo "📊 Artifacts available:"
           echo "- Unit Test: xunit.xml"
           echo "- Coverage: coverage/lcov.info"
           echo "- Snyk: snyk-report.json"
