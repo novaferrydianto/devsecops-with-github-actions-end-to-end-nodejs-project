@@ -1,25 +1,45 @@
 /**
- * Created by alicia.sykes on 24/08/2015.
+ * Updated preparing-data-test.js
+ * Modern async/await + mock fetch
  */
 
-/* Include testing tools */
-var chai = require('chai');
-var expect = chai.expect;
-var sinon = require('sinon');
+import { expect } from "chai";
+import sinon from "sinon";
+import { fetchWeather } from "../fetch-weather.js";
 
-/* Include module(s) to test */
-var fetchWeather = require('../fetch-weather');
+/* Mock sample API response */
+const rawWeatherData = {
+  main: { temp_min: 295.15, temp_max: 300.15 },
+  rain: { "1h": 0.5 },
+  clouds: { all: 75 } // mock cloud cover
+};
 
-/* Include sample data */
-var rawWeatherData = require('../test-data/sample-weather-raw.json');
+describe("Weather data processing", function () {
+  let fetchStub;
 
-describe('Test that the data fetched from OpenWeatherMap is processed correctly', function(){
-
-    it('Should check fetched data is processed correctly', function(){
-        var callback = sinon.stub();
-        callback.withArgs("London").returns(rawWeatherData);
-        //TODO
+  beforeEach(() => {
+    fetchStub = sinon.stub(global, "fetch").resolves({
+      ok: true,
+      json: async () => rawWeatherData,
     });
+  });
 
+  afterEach(() => fetchStub.restore());
+
+  it("should process fetched weather data correctly", async () => {
+    const result = await fetchWeather("London");
+
+    console.table(result); // 👀 optional: helps visualize during local runs
+
+    expect(result).to.have.keys([
+      "minTemp",
+      "maxTemp",
+      "chanceRain",
+      "rainFall",
+      "cloudCover",
+    ]);
+    expect(result.minTemp).to.be.a("number");
+    expect(result.maxTemp).to.be.a("number");
+    expect(result.cloudCover).to.equal(75); // ✅ fixed expectation
+  });
 });
-

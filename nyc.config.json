@@ -1,0 +1,9 @@
+{
+  "all": true,
+  "reporter": ["text-summary", "lcov"],
+  "include": ["fetch-weather.js", "prepared-for-the-weather.js"],
+  "exclude": ["test/**", "node_modules/**"],
+  "report-dir": "./coverage",
+  "extension": [".js"],
+  "check-coverage": true
+}

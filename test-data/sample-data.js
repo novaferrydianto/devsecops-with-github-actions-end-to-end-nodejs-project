@@ -1,42 +1,37 @@
-module.exports.weatherData = {
-    cold_rainy: {
-        'minTemp'   : 8,    // Celsius
-        'maxTemp'   : 10,   // Celsius
-        'windSpeed' : 42,   // km/ph
-        'chanceRain': 0.83, // 0 - 1
-        'rainFall'  : 26,   // mm
-        'cloudCover': 72    // percentage
-    },
-    mild_windy: {
-        'minTemp'   : 11,
-        'maxTemp'   : 16,
-        'windSpeed' : 112,
-        'chanceRain': 0.31,
-        'rainFall'  : 0.5,
-        'cloudCover': 43
-    },
-    hot_sunny: {
-        'minTemp'   : 26,
-        'maxTemp'   : 31,
-        'windSpeed' : 12,
-        'chanceRain': 0,
-        'rainFall'  : 0,
-        'cloudCover': 0
-    },
-    cold_clear: {
-        'minTemp'   : -8,
-        'maxTemp'   : -2,
-        'windSpeed' : 2,
-        'chanceRain': 0,
-        'rainFall'  : 0,
-        'cloudCover': 0
-    },
-    warm_wet: {
-        'minTemp'   : 18,
-        'maxTemp'   : 25,
-        'windSpeed' : 42,
-        'chanceRain': 0.83,
-        'rainFall'  : 16,
-        'cloudCover': 72
-    }
+/**
+ * test-data/sample-data.js
+ * Modern ES Module export for weather tests
+ */
+
+export const weatherData = {
+  cold_rainy: {
+    minTemp: 10,
+    maxTemp: 14,
+    rainFall: 8,
+    cloudCover: 90
+  },
+  mild_windy: {
+    minTemp: 17,
+    maxTemp: 22,
+    rainFall: 0,
+    cloudCover: 40
+  },
+  hot_sunny: {
+    minTemp: 26,
+    maxTemp: 33,
+    rainFall: 0,
+    cloudCover: 10
+  },
+  cold_clear: {
+    minTemp: 8,
+    maxTemp: 13,
+    rainFall: 0,
+    cloudCover: 20
+  },
+  warm_wet: {
+    minTemp: 22,
+    maxTemp: 27,
+    rainFall: 5,
+    cloudCover: 70
+  }
 };
