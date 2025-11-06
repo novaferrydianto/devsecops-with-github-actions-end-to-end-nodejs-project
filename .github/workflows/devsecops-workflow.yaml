@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [master]
   schedule:
-    - cron: '0 3 * * 0' # Weekly Sunday auto security scan
+    - cron: '0 3 * * *' # daily at 03:00 UTC
   workflow_dispatch:
     inputs:
       run_zap_only:
