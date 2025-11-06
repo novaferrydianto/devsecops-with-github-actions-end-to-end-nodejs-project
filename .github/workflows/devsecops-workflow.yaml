@@ -12,6 +12,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  issues: write # needed for auto-issue creation
 
 jobs:
   build_and_sast:
@@ -63,32 +64,7 @@ jobs:
           path: coverage/
 
       - name: ✅ Coverage Summary
-        run: |
-          npx nyc report --reporter=text-summary > coverage-summary.txt
-          cat coverage-summary.txt
-
-      - name: 💬 Generate Coverage Summary for PR
-        if: github.event_name == 'pull_request'
-        run: |
-          echo "🧪 **Test & Coverage Report**" > coverage-comment.md
-          echo "" >> coverage-comment.md
-          if grep -q "100%" coverage-summary.txt; then
-            echo "✅ All tests passed with **100% coverage!**" >> coverage-comment.md
-          else
-            echo "⚠️ Partial coverage detected — please review!" >> coverage-comment.md
-          fi
-          echo "" >> coverage-comment.md
-          echo "📈 \`$(grep 'Statements' coverage-summary.txt | sed 's/^.*: //')\`" >> coverage-comment.md
-          echo "📊 See full report: \`coverage/lcov.info\`" >> coverage-comment.md
-          echo "" >> coverage-comment.md
-          echo "🧾 Generated automatically by CI 🧠" >> coverage-comment.md
-
-      - name: 🗨️ Comment PR with Coverage Summary
-        if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: 🧪 Test & Coverage Report
-          path: coverage-comment.md
+        run: npx nyc report --reporter=text-summary
 
       - name: 🚀 SonarCloud Scan (SAST)
         uses: sonarsource/sonarcloud-github-action@v2
@@ -101,15 +77,6 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.testExecutionReportPaths=xunit.xml
             -Dsonar.sourceEncoding=UTF-8
-
-      - name: 🧾 Job Summary — Test & Coverage
-        if: always()
-        run: |
-          echo "## 🧪 Test & Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat coverage-summary.txt >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "📊 Full report: [coverage/lcov.info](./coverage/lcov.info)" >> $GITHUB_STEP_SUMMARY
 
   sca_snyk:
     name: 🧩 Software Composition Analysis (SCA) - Snyk
@@ -130,7 +97,7 @@ jobs:
         run: npm ci
 
       - name: 🕵️ Run Snyk Vulnerability Scan
-        uses: snyk/actions/node@master
+        uses: snyk/actions/setup@v4
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -139,7 +106,7 @@ jobs:
           args: --severity-threshold=high --json-file-output=snyk-report.json
 
       - name: 🧩 Monitor project in Snyk Dashboard
-        uses: snyk/actions/node@master
+        uses: snyk/actions/setup@v4
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -150,41 +117,6 @@ jobs:
         with:
           name: snyk-report
           path: snyk-report.json
-
-      - name: 💬 Post Snyk Summary to PR
-        if: github.event_name == 'pull_request'
-        run: |
-          if grep -q '"severity":"critical"' snyk-report.json; then
-            SUMMARY="⚠️ **Critical vulnerabilities found!**"
-          elif grep -q '"severity":"high"' snyk-report.json; then
-            SUMMARY="⚠️ **High vulnerabilities found!**"
-          else
-            SUMMARY="✅ **No high or critical vulnerabilities found.**"
-          fi
-          echo "${SUMMARY}" > snyk-summary.md
-          echo "" >> snyk-summary.md
-          echo "📊 See full report artifact: \`snyk-report.json\`" >> snyk-summary.md
-          echo "🔗 [View project in Snyk Dashboard](https://app.snyk.io)" >> snyk-summary.md
-
-      - name: 🗨️ Comment PR with Snyk Summary
-        if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: 🛡️ Snyk Security Scan
-          path: snyk-summary.md
-
-      - name: 🧾 Job Summary — Snyk Security
-        if: always()
-        run: |
-          echo "## 🛡️ Snyk Security Summary" >> $GITHUB_STEP_SUMMARY
-          if grep -q '"severity":"critical"' snyk-report.json; then
-            echo "⚠️ **Critical vulnerabilities found!**" >> $GITHUB_STEP_SUMMARY
-          elif grep -q '"severity":"high"' snyk-report.json; then
-            echo "⚠️ **High severity vulnerabilities found!**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "✅ No high or critical vulnerabilities detected." >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "📄 [Full report](./snyk-report.json)" >> $GITHUB_STEP_SUMMARY
 
   optional_trivy:
     name: 🧠 Container & IaC Security (Trivy)
@@ -210,20 +142,15 @@ jobs:
           name: trivy-report
           path: trivy-report.txt
 
-      - name: 🧾 Job Summary — Trivy Scan
-        if: always()
-        run: |
-          echo "## 🧠 Trivy IaC & Container Scan" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          tail -n 20 trivy-report.txt >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "📄 [Full report](./trivy-report.txt)" >> $GITHUB_STEP_SUMMARY
-
   dast_zap:
     name: 🎯 Dynamic App Security Testing (OWASP ZAP)
     runs-on: ubuntu-latest
     needs: sca_snyk
     continue-on-error: true
+
+    env:
+      ZAP_FAIL_ON_HIGH: true
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: 🛒 Checkout Repository
@@ -240,32 +167,86 @@ jobs:
       - name: 🚀 Start Application in Background
         run: |
           nohup npm start &
-          sleep 10
+          echo "🌐 Waiting for app on port 3000..."
+          for i in {1..20}; do
+            if curl -sSf http://localhost:3000 > /dev/null; then
+              echo "✅ App reachable!"
+              exit 0
+            fi
+            echo "⏳ $i/20 waiting..."
+            sleep 5
+          done
+          echo "❌ App failed to start."
+          exit 1
 
-      - name: 🧪 Run OWASP ZAP Full Scan (DAST)
+      - name: 🧪 Run OWASP ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.12.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
           target: 'http://localhost:3000'
           cmd_options: '-a'
-          report_name: zap-report.html
-          output_dir: reports
-          allow_issue_writing: true
+          issue_title: 'ZAP Full Scan Report'
           fail_action: false
+          allow_issue_writing: true
+          artifact_name: zap-scan-results
 
-      - name: 📤 Upload ZAP Report
+      - name: 📤 Upload ZAP Reports
         uses: actions/upload-artifact@v4
         with:
-          name: zap-full-scan
-          path: reports/zap-report.html
+          name: zap-scan-results
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
 
-      - name: 🧾 Job Summary — ZAP DAST
+      - name: 📊 Parse Vulnerabilities
+        if: always()
+        run: |
+          if [ -f report_json.json ]; then
+            HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l)
+            MEDIUM=$(grep -o '"risk":"Medium"' report_json.json | wc -l)
+            LOW=$(grep -o '"risk":"Low"' report_json.json | wc -l)
+            INFO=$(grep -o '"risk":"Informational"' report_json.json | wc -l)
+            echo "ZAP_SCAN_SUMMARY=⚠️ $HIGH High | 🟠 $MEDIUM Medium | 🟢 $LOW Low | 🔵 $INFO Info" >> $GITHUB_ENV
+            echo "ZAP_HIGH_COUNT=$HIGH" >> $GITHUB_ENV
+            grep -A3 '"risk":"High"' report_json.json | head -n 30 > top_high.txt
+          else
+            echo "ZAP_SCAN_SUMMARY=❌ No JSON report found" >> $GITHUB_ENV
+            echo "ZAP_HIGH_COUNT=0" >> $GITHUB_ENV
+          fi
+
+      - name: ❌ Fail if High Risk Found
+        if: env.ZAP_FAIL_ON_HIGH == 'true' && env.ZAP_HIGH_COUNT != '0'
+        run: |
+          echo "🚨 $ZAP_HIGH_COUNT high-risk vulnerabilities detected!"
+          exit 1
+
+      - name: 🪶 Auto-create GitHub Issue for High Risks
+        if: env.ZAP_HIGH_COUNT != '0'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "🔥 ZAP Scan: High-Risk Vulnerabilities Detected"
+          content-filepath: top_high.txt
+          labels: |
+            security
+            zap
+            high-risk
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🧾 Summary — ZAP DAST
         if: always()
         run: |
           echo "## 🎯 OWASP ZAP DAST Summary" >> $GITHUB_STEP_SUMMARY
-          echo "📄 [ZAP HTML Report](./reports/zap-report.html)" >> $GITHUB_STEP_SUMMARY
-          echo "🔍 Automated dynamic web app security test complete." >> $GITHUB_STEP_SUMMARY
+          echo "🌐 Target: http://localhost:3000" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${ZAP_SCAN_SUMMARY}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📄 [HTML Report](./report_html.html)" >> $GITHUB_STEP_SUMMARY
+          echo "📄 [Markdown Report](./report_md.md)" >> $GITHUB_STEP_SUMMARY
+          echo "📄 [JSON Report](./report_json.json)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🪶 If any high risks were found, a GitHub Issue was created automatically." >> $GITHUB_STEP_SUMMARY
 
   summary:
     name: 🧾 Generate DevSecOps Summary
@@ -273,32 +254,12 @@ jobs:
     needs: [build_and_sast, sca_snyk, optional_trivy, dast_zap]
 
     steps:
-      - name: 📜 Generate Final DevSecOps Markdown Summary
+      - name: 📜 Summary Report
         run: |
-          echo "# 🧾 DevSecOps Pipeline Summary" > devsecops-summary.md
-          echo "" >> devsecops-summary.md
-          echo "✅ **All security stages completed successfully!**" >> devsecops-summary.md
-          echo "" >> devsecops-summary.md
-          echo "| Stage | Status | Artifact |" >> devsecops-summary.md
-          echo "|-------|--------|-----------|" >> devsecops-summary.md
-          echo "| 🧪 Tests & Coverage | ✅ Passed | coverage/lcov.info |" >> devsecops-summary.md
-          echo "| 🛡️ Snyk SCA | ✅ Completed | snyk-report.json |" >> devsecops-summary.md
-          echo "| 🧠 Trivy Scan | ✅ Completed | trivy-report.txt |" >> devsecops-summary.md
-          echo "| 🎯 ZAP DAST | ✅ Completed | reports/zap-report.html |" >> devsecops-summary.md
-          echo "" >> devsecops-summary.md
-          echo "✨ Generated on: $(date -u)" >> devsecops-summary.md
-          echo "👷 Runner: $RUNNER_NAME ($RUNNER_OS)" >> devsecops-summary.md
-          echo "" >> devsecops-summary.md
-          echo "---" >> devsecops-summary.md
-          echo "🧠 *Generated automatically by DevSecOps CI Pipeline — $(date -u)*" >> devsecops-summary.md
-
-      - name: 📤 Upload DevSecOps Markdown Summary
-        uses: actions/upload-artifact@v4
-        with:
-          name: devsecops-summary
-          path: devsecops-summary.md
-
-      - name: 🧾 Append Final Summary to GitHub Checks
-        run: |
-          echo "## 🧾 DevSecOps Summary (Full Report)" >> $GITHUB_STEP_SUMMARY
-          cat devsecops-summary.md >> $GITHUB_STEP_SUMMARY
+          echo "✅ All DevSecOps stages completed successfully!"
+          echo "📊 Artifacts available:"
+          echo "- Unit Test: xunit.xml"
+          echo "- Coverage: coverage/lcov.info"
+          echo "- Snyk: snyk-report.json"
+          echo "- Trivy: trivy-report.txt"
+          echo "- ZAP: report_html.html"
