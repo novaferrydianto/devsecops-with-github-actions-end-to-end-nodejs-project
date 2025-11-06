@@ -82,13 +82,20 @@ jobs:
         run: npm install
 
       - name: 🕵️ Run Snyk Vulnerability Scan
-        uses: snyk/actions/node@3.1.0
+        uses: snyk/actions/setup@v4
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: test
           args: --severity-threshold=high --json-file-output=snyk-report.json
+
+      - name: 🧩 Monitor project in Snyk Dashboard
+        uses: snyk/actions/setup@v4
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: monitor
 
       - name: 📤 Upload Snyk Report
         uses: actions/upload-artifact@v4
