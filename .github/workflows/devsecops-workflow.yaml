@@ -96,7 +96,7 @@ jobs:
         run: npm ci
 
       - name: 🕵️ Run Snyk Vulnerability Scan
-        uses: snyk/actions/setup@v4
+        uses: snyk/actions/setup@v3
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -105,7 +105,7 @@ jobs:
           args: --severity-threshold=high --json-file-output=snyk-report.json
 
       - name: 🧩 Monitor project in Snyk Dashboard
-        uses: snyk/actions/setup@v4
+        uses: snyk/actions/setup@v3
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -116,6 +116,33 @@ jobs:
         with:
           name: snyk-report
           path: snyk-report.json
+
+      # 🔽 NEW: Auto-comment summary to PR
+      - name: 💬 Post Snyk Summary to PR
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "🛡️ Generating Snyk summary..."
+          if grep -q '"severity":"critical"' snyk-report.json; then
+            echo "⚠️ Critical vulnerabilities detected!"
+            SUMMARY="⚠️ **Critical vulnerabilities found!**"
+          elif grep -q '"severity":"high"' snyk-report.json; then
+            echo "⚠️ High severity vulnerabilities detected!"
+            SUMMARY="⚠️ **High vulnerabilities found!**"
+          else
+            echo "✅ No high/critical vulnerabilities detected!"
+            SUMMARY="✅ **No high or critical vulnerabilities found.**"
+          fi
+          echo "${SUMMARY}" > snyk-summary.md
+          echo "" >> snyk-summary.md
+          echo "📊 See full report artifact: \`snyk-report.json\`" >> snyk-summary.md
+          echo "🔗 [View project in Snyk Dashboard](https://app.snyk.io)" >> snyk-summary.md
+
+      - name: 🗨️ Comment PR with Snyk Summary
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: 🛡️ Snyk Security Scan
+          path: snyk-summary.md
 
   optional_trivy:
     name: 🧠 Container & IaC Security (Trivy)
