@@ -3,10 +3,10 @@ name: Build, Test, and Secure Node.js App 🛡️
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
   schedule:
     - cron: '0 3 * * 0' # Weekly Sunday auto security scan
 
