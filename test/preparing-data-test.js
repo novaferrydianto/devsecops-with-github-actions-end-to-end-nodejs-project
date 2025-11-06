@@ -61,7 +61,7 @@ describe("Weather data processing", function () {
   });
 
   it("should throw an error when API responds with 500", async () => {
-    fetchStub = sinon.stub(global, "fetch").resolves({
+    fetchStub = sinon.stub(global, "fetch").rejects({
       ok: false,
       status: 500,
     });
