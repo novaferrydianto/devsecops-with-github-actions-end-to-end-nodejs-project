@@ -37,19 +37,33 @@ jobs:
             ${{ runner.os }}-node-
 
       - name: 📦 Install Dependencies
-        run: npm install
+        run: npm ci
+
+      - name: 🧰 Verify Dev Dependencies (Self-Healing)
+        run: |
+          echo "🔍 Checking essential dev dependencies..."
+          npm ls source-map-support || npm install --save-dev source-map-support
+          npm ls cross-env || npm install --save-dev cross-env
+          npm ls nyc || npm install --save-dev nyc
+          echo "✅ Dev dependencies verified."
 
       - name: 🧪 Run Unit Tests
         run: npm test
 
-      - name: 📊 Run Coverage
-        run: npm run cover
+      - name: 📊 Run Coverage (NYC + Mocha)
+        run: |
+          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
+          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: 📤 Upload Coverage Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
+
+      - name: ✅ Coverage Summary
+        run: npx nyc report --reporter=text-summary
 
       - name: 🚀 SonarCloud Scan (SAST)
         uses: sonarsource/sonarcloud-github-action@v2
@@ -79,7 +93,7 @@ jobs:
           cache: npm
 
       - name: 📦 Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🕵️ Run Snyk Vulnerability Scan
         uses: snyk/actions/setup@v4
@@ -143,7 +157,7 @@ jobs:
           node-version: 20
 
       - name: 📦 Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🚀 Start Application in Background
         run: |

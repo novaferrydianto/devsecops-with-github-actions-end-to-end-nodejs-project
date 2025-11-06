@@ -5,8 +5,9 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "test": "npx mocha --reporter mocha-sonarqube-reporter test --reporter-options output=xunit.xml",
-    "cover": "nyc mocha",
+    "test": "mocha --reporter mocha-sonarqube-reporter --reporter-options output=xunit.xml test --exit",
+    "cover": "cross-env NODE_OPTIONS=--experimental-vm-modules nyc --reporter=text --reporter=lcov mocha --exit",
+    "precover": "rm -rf .nyc_output coverage",
     "postinstall": "node fix-mocha-exit.js"
   },
   "author": "Nova Ferrydianto <novaferrydianto@gmail.com>",
@@ -14,17 +15,46 @@
   "devDependencies": {
     "chai": "^4.3.10",
     "chai-as-promised": "^7.1.2",
-    "coffeescript": "^2.7.0",
+    "cross-env": "^10.1.0",
     "mocha": "^10.2.0",
     "mocha-sonarqube-reporter": "1.0.2",
     "mochawesome": "^7.1.3",
     "mockery": "^2.1.0",
     "nyc": "^15.1.0",
-    "sinon": "^17.0.0"
+    "sinon": "^17.0.0",
+    "source-map-support": "^0.5.21"
   },
   "dependencies": {
     "colors": "^1.4.0",
     "command-line-args": "^6.0.1",
     "node-fetch": "^3.3.2"
+  },
+  "nyc": {
+    "all": true,
+    "include": [
+      "*.js",
+      "src/**/*.js"
+    ],
+    "exclude": [
+      "test",
+      "node_modules"
+    ],
+    "reporter": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "report-dir": "coverage",
+    "extension": [
+      ".js",
+      ".mjs"
+    ],
+    "require": [
+      "source-map-support/register"
+    ],
+    "instrument": true,
+    "hookRequire": true,
+    "hookRunInContext": true,
+    "hookRunInThisContext": true
   }
 }

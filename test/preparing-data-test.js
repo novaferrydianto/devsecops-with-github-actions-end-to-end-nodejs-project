@@ -64,6 +64,7 @@ describe("Weather data processing", function () {
     fetchStub = sinon.stub(global, "fetch").resolves({
       ok: false,
       status: 500,
+      json: async () => ({}),
     });
 
     await expect(fetchWeather("Tokyo")).to.be.rejectedWith("HTTP error");
