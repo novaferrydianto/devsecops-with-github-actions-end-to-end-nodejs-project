@@ -97,7 +97,7 @@ jobs:
         run: npm ci
 
       - name: 🕵️ Run Snyk Vulnerability Scan
-        uses: snyk/actions/node@master
+        uses: snyk/actions/node@v3
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -106,7 +106,7 @@ jobs:
           args: --severity-threshold=high --json-file-output=snyk-report.json
 
       - name: 🧩 Monitor Project in Snyk Dashboard
-        uses: snyk/actions/node@master
+        uses: snyk/actions/node@v3
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -168,12 +168,12 @@ jobs:
         run: |
           nohup npm start &
           echo "🌐 Waiting for app on port 3000..."
-          for i in {1..20}; do
+          for i in {1..30}; do
             if curl -sSf http://localhost:3000 > /dev/null; then
               echo "✅ App reachable!"
               exit 0
             fi
-            echo "⏳ $i/20 waiting..."
+            echo "⏳ $i/30 waiting..."
             sleep 5
           done
           echo "❌ App failed to start."
@@ -199,6 +199,7 @@ jobs:
             report_html.html
             report_md.md
             report_json.json
+          overwrite: true   # ✅ fixes 409 Conflict
 
       - name: 📊 Parse Vulnerabilities
         if: always()
