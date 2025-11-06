@@ -97,14 +97,49 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🕵️ Run Snyk Scan
-        uses: snyk/actions/node@v3
+      - name: 🕵️ Run Snyk Vulnerability Scan
+        uses: snyk/actions/node@0.4.0
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: test
-          args: --severity-threshold=high --json-file-output=snyk-report.json
+          args: --severity-threshold=low --json-file-output=snyk-report.json
+
+      - name: 📊 Parse & Enforce Snyk Severity Policy
+        if: always()
+        run: |
+          echo "🔍 Checking Snyk report for high-severity vulns..."
+          if [ ! -f snyk-report.json ]; then
+            echo "❌ No snyk-report.json found!"
+            exit 1
+          fi
+
+          HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l)
+          CRITICAL=$(grep -o '"severity":"critical"' snyk-report.json | wc -l)
+          TOTAL=$((HIGH + CRITICAL))
+
+          echo "⚠️ Found $HIGH high and $CRITICAL critical issues."
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "🚨 Policy violation: High/Critical vulnerabilities detected!"
+            echo "Please review snyk-report.json in artifacts."
+            exit 1
+          else
+            echo "✅ No high-severity vulnerabilities found. All good!"
+          fi
+
+      - name: 🪶 Auto-create GitHub Issue for High Vulns
+        if: ${{ failure() }}
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "🚨 Snyk Scan: High/Critical Vulnerabilities Detected"
+          content-filepath: snyk-report.json
+          labels: |
+            security
+            snyk
+            high-risk
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 📤 Upload Snyk Report
         uses: actions/upload-artifact@v4
@@ -123,7 +158,7 @@ jobs:
       - name: 🛒 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔍 Run Trivy FS Scan
+      - name: 🔍 Run Trivy File System Scan
         uses: aquasecurity/trivy-action@0.18.0
         with:
           scan-type: 'fs'
@@ -159,7 +194,7 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🚀 Start Application
+      - name: 🚀 Start Application in Background
         run: |
           nohup npm start &
           echo "🌐 Waiting for app on port 3000..."
@@ -168,6 +203,7 @@ jobs:
               echo "✅ App reachable!"
               exit 0
             fi
+            echo "⏳ $i/30 waiting..."
             sleep 5
           done
           echo "❌ App failed to start."
@@ -212,14 +248,19 @@ jobs:
         with:
           title: "🔥 ZAP Scan: High-Risk Vulnerabilities Detected"
           content-filepath: top_high.txt
-          labels: security, zap, high-risk
+          labels: |
+            security
+            zap
+            high-risk
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🧾 Summary — ZAP DAST
         if: always()
         run: |
-          echo "## 🎯 OWASP ZAP Summary" >> $GITHUB_STEP_SUMMARY
-          echo "📄 [ZAP HTML Report](./report_html.html)" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 OWASP ZAP DAST Summary" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 Target: http://localhost:3000" >> $GITHUB_STEP_SUMMARY
+          echo "${ZAP_SCAN_SUMMARY}" >> $GITHUB_STEP_SUMMARY
+          echo "📄 [HTML Report](./report_html.html)" >> $GITHUB_STEP_SUMMARY
 
   summary:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only != 'true' }}
