@@ -1,0 +1,29 @@
+<testExecutions version="1">
+<file path="test\fetch-weather-helper-test.js">
+<testCase name="Weather Helper Functions: should correctly convert Kelvin to Celsius" duration="1"/>
+<testCase name="Weather Helper Functions: should correctly extract rainfall from object" duration="0"/>
+</file>
+<file path="test\preparing-data-test.js">
+<testCase name="Weather data processing: ✅ should process fetched weather data correctly" duration="287">
+<failure message="expected +0 to equal 0.5"><![CDATA[AssertionError: expected +0 to equal 0.5
+    at Context.<anonymous> (file:///D:/Repo/devsecops-with-github-actions-end-to-end-nodejs-project/test/preparing-data-test.js:43:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)]]></failure>
+</testCase>
+<testCase name="Weather data processing: ✅ should handle missing rain data gracefully" duration="26">
+<failure message="expected 40 to equal 75"><![CDATA[AssertionError: expected 40 to equal 75
+    at Context.<anonymous> (file:///D:/Repo/devsecops-with-github-actions-end-to-end-nodejs-project/test/preparing-data-test.js:59:34)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)]]></failure>
+</testCase>
+<testCase name="Weather data processing: ✅ should throw an error when API responds with 500" duration="35">
+<failure message="expected &apos;Expected fetchWeather() to throw&apos; to include &apos;HTTP error&apos;"><![CDATA[AssertionError: expected 'Expected fetchWeather() to throw' to include 'HTTP error'
+    at Context.<anonymous> (file:///D:/Repo/devsecops-with-github-actions-end-to-end-nodejs-project/test/preparing-data-test.js:74:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)]]></failure>
+</testCase>
+</file>
+<file path="test\weather-kit-test.js">
+<testCase name="Test the weather kit module&apos;s basic functionality: should return true for umbrella test if it is raining" duration="0"/>
+<testCase name="Test the weather kit module&apos;s basic functionality: should return true if suncream is required" duration="0"/>
+<testCase name="Test the weather kit module&apos;s basic functionality: should return true if jumper is required" duration="0"/>
+<testCase name="Test the weather kit module&apos;s basic functionality: should always return true as water is always required" duration="0"/>
+</file>
+</testExecutions>

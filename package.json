@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "test": "npx mocha --reporter mocha-sonarqube-reporter test --reporter-options output=xunit.xml",
-    "cover": "nyc mocha"
+    "cover": "nyc mocha",
+    "postinstall": "node fix-mocha-exit.js"
   },
   "author": "Nova Ferrydianto <novaferrydianto@gmail.com>",
   "license": "ISC",
