@@ -97,7 +97,7 @@ jobs:
         run: npm ci
 
       - name: 🕵️ Run Snyk Vulnerability Scan
-        uses: snyk/actions/setup@v4
+        uses: snyk/actions/node@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -105,8 +105,8 @@ jobs:
           command: test
           args: --severity-threshold=high --json-file-output=snyk-report.json
 
-      - name: 🧩 Monitor project in Snyk Dashboard
-        uses: snyk/actions/setup@v4
+      - name: 🧩 Monitor Project in Snyk Dashboard
+        uses: snyk/actions/node@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
