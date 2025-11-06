@@ -16,9 +16,10 @@ export async function fetchWeather(location) {
     throw new Error(`Network failure: ${err.message}`);
   }
 
-  // ✅ Ensure 500 mock test throws properly
+  // Ensure 500 mock test throws properly
   if (!res || res.ok === false || res.status >= 400) {
-    throw new Error(`HTTP error! Status: ${res?.status ?? "Unknown"}`);
+    // include 'HTTP error' in the message so the test matches
+    throw new Error(`HTTP error ${res?.status ?? "Unknown"}`);
   }
 
   const body = await res.json();
@@ -42,7 +43,7 @@ function kelvinToCelsius(kTemp) {
 function getRainFall(rainObj) {
   if (!rainObj || typeof rainObj !== "object") return 0;
 
-  // ✅ Normalize key lookup for stub/CI consistency
+  // Normalize key lookup for stub/CI consistency
   const keys = Object.keys(rainObj);
   for (const key of keys) {
     if (["1h", "2h", "3h"].includes(key)) {
