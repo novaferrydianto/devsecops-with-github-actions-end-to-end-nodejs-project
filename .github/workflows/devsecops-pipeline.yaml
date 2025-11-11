@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: 🛒 Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🧩 Setup Node.js
         uses: actions/setup-node@v4
@@ -74,15 +74,18 @@ jobs:
     needs: build_and_sast
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: 🧩 Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: npm ci
 
       - name: 🕵️ Run Snyk Vulnerability Scan
-        uses: snyk/actions/node@v4
+        uses: snyk/actions/node@9adf32b1121593767fc3c057af55b55db032dc04 # 1.0.0
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -102,7 +105,7 @@ jobs:
 
       - name: 🪶 Create Security Issue (Snyk)
         if: ${{ failure() }}
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
         with:
           title: "🚨 Security Scan Failure — Snyk High/Critical"
           content-filepath: snyk-report.json
@@ -126,10 +129,11 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v5
 
       - name: 🔍 Run Trivy File System Scan
-        uses: aquasecurity/trivy-action@v0.18.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           scan-type: 'fs'
           ignore-unfixed: true
@@ -161,8 +165,11 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: 🧩 Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -177,8 +184,8 @@ jobs:
           done
           exit 1
 
-      - name: 🧪 Run OWASP ZAP Scan
-        uses: zaproxy/action-full-scan@v0.12.0
+      - name: 🧪 Run OWASP ZAP Full Scan
+        uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c # v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: 'http://localhost:3000'
@@ -194,7 +201,7 @@ jobs:
 
       - name: 🪶 Create Security Issue (ZAP)
         if: env.ZAP_HIGH_COUNT != '0'
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "🔥 ZAP Scan: High-Risk Vulnerabilities"
           content-filepath: zap-high.txt
