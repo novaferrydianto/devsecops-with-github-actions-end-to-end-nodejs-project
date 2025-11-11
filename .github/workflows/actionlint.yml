@@ -1,4 +1,6 @@
 name: Lint Workflows (actionlint)
+permissions:
+  contents: read
 
 on:
   pull_request:
