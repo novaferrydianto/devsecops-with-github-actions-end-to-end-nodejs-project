@@ -131,7 +131,7 @@ jobs:
 
       - name: 🪶 Auto-create GitHub Issue for High Vulns
         if: ${{ failure() }}
-        uses: peter-evans/create-issue-from-file@e8ef132d6df98ed982188e460ebb3b5d4ef3a9cd # v5.0.1
+        uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
         with:
           title: "🚨 Snyk Scan: High/Critical Vulnerabilities Detected"
           content-filepath: snyk-report.json
@@ -244,7 +244,7 @@ jobs:
 
       - name: 🪶 Auto-create GitHub Issue for High Risks
         if: env.ZAP_HIGH_COUNT != '0'
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "🔥 ZAP Scan: High-Risk Vulnerabilities Detected"
           content-filepath: top_high.txt
