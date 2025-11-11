@@ -105,7 +105,7 @@ jobs:
 
       - name: 🪶 Create Security Issue (Snyk)
         if: ${{ failure() }}
-        uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "🚨 Security Scan Failure — Snyk High/Critical"
           content-filepath: snyk-report.json
@@ -142,7 +142,7 @@ jobs:
 
       - name: 🪶 Create Security Issue (Trivy)
         if: failure()
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "🚨 Security Scan Failure — Trivy Critical"
           content-filepath: trivy-report.txt
@@ -178,10 +178,16 @@ jobs:
       - name: 🚀 Start App
         run: |
           nohup npm start &
-          for i in {1..30}; do
-            if curl -sSf http://localhost:3000 > /dev/null; then exit 0; fi
+          echo "🌐 Waiting for app on port 3000..."
+          for i in {1..40}; do
+            if curl -sSf http://localhost:3000/health > /dev/null; then
+              echo "✅ App is live and ready!"
+              exit 0
+            fi
+            echo "⏳ Waiting ($i/40)..."
             sleep 5
           done
+          echo "❌ App failed to start after 200s."
           exit 1
 
       - name: 🧪 Run OWASP ZAP Full Scan
@@ -191,13 +197,17 @@ jobs:
           target: 'http://localhost:3000'
           cmd_options: '-a'
           fail_action: false
-          artifact_name: zap-results
+          artifact_name: zap-results-${{ github.run_attempt }}
 
       - name: 📊 Parse ZAP Findings
         run: |
-          HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l || true)
-          echo "ZAP_HIGH_COUNT=$HIGH" >> $GITHUB_ENV
-          grep -A3 '"risk":"High"' report_json.json | head -n 20 > zap-high.txt || true
+          if [ -f report_json.json ]; then
+            HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l || true)
+            echo "ZAP_HIGH_COUNT=$HIGH" >> $GITHUB_ENV
+            grep -A3 '"risk":"High"' report_json.json | head -n 20 > zap-high.txt || true
+          else
+            echo "ZAP_HIGH_COUNT=0" >> $GITHUB_ENV
+          fi
 
       - name: 🪶 Create Security Issue (ZAP)
         if: env.ZAP_HIGH_COUNT != '0'
@@ -212,12 +222,14 @@ jobs:
             high-risk
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/upload-artifact@v4
+      - name: 📤 Upload ZAP Reports
+        uses: actions/upload-artifact@v4
         with:
-          name: zap-results
+          name: zap-results-${{ github.run_attempt }}
           path: |
             report_html.html
             report_json.json
+          overwrite: true
 
   summary:
     if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
