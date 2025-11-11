@@ -62,7 +62,7 @@ jobs:
 
       - name: 📤 Upload Coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: coverage/
@@ -142,7 +142,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 📤 Upload Snyk Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: snyk-report
           path: snyk-report.json
@@ -167,7 +167,7 @@ jobs:
           output: 'trivy-report.txt'
 
       - name: 📤 Upload Trivy Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: trivy-report
           path: trivy-report.txt
@@ -222,7 +222,7 @@ jobs:
           artifact_name: zap-scan-results
 
       - name: 📤 Upload ZAP Reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: zap-scan-results
           path: |
