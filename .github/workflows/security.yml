@@ -33,7 +33,7 @@ jobs:
       - run: npm ci
 
       - name: 🕵️ Snyk Test
-        uses: snyk/actions/node@b98d498629f1c368650224d6d212bf7dfa89e4bf
+        uses: snyk/actions/node@9adf32b1121593767fc3c057af55b55db032dc04
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
