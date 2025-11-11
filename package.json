@@ -4,7 +4,7 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node --require @aikidosec/firewall app.js",
     "test": "mocha --reporter mocha-sonarqube-reporter --reporter-options output=xunit.xml test --exit",
     "cover": "cross-env NODE_OPTIONS=--experimental-vm-modules nyc --reporter=text --reporter=lcov mocha --exit",
     "precover": "rm -rf .nyc_output coverage",
@@ -25,6 +25,7 @@
     "source-map-support": "^0.5.21"
   },
   "dependencies": {
+    "@aikidosec/firewall": "^1.7.18",
     "colors": "^1.4.0",
     "command-line-args": "^6.0.1",
     "node-fetch": "^3.3.2"

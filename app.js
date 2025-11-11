@@ -1,20 +1,27 @@
 /**
  * Created by alicia.sykes on 24/08/2015.
- * Updated for modern Node.js (ESM + DevSecOps)
+ * Updated for modern Node.js (ESM + DevSecOps by Nova Ferrydianto)
  */
 
 import 'colors';
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { fetchWeather } from './fetch-weather.js';
 import * as prepareForWeather from './prepared-for-the-weather.js';
 import commandLineArgs from 'command-line-args';
 import http from 'http';
 
+// ✅ Optional: Lightweight runtime protection (RASP)
+import '@aikidosec/firewall';
+
+// 🧩 Command line args
 const options = commandLineArgs([
-  { name: 'location', alias: 'l', type: String, defaultValue: 'London' }
+  { name: 'location', alias: 'l', type: String, defaultValue: process.env.DEFAULT_LOCATION || 'London' },
 ]);
 const location = options.location;
 
-// Fetch weather data
+// 🚀 Fetch weather and process recommendations
 fetchWeather(location)
   .then((today) => {
     const weatherKit = [
@@ -24,33 +31,44 @@ fetchWeather(location)
       { name: 'Water', value: prepareForWeather.doINeed.water(today) },
     ];
 
-    for (const item of weatherKit) {
-      printLine(item.value, item.name);
-    }
+    console.log(`\n🌤️ Weather forecast for ${location}:\n`.cyan);
+    for (const item of weatherKit) printLine(item.value, item.name);
 
-    // ✅ Start a simple HTTP server for DAST/ZAP scans
-    startServer();
+    // ✅ Start HTTP server for OWASP ZAP scans
+    startServer(today);
   })
   .catch((err) => {
-    console.error('❌ Failed to fetch weather data:', err.message.red);
+    console.error('❌ Failed to fetch weather data:'.red, err.message);
     process.exit(1);
   });
 
-// Pretty console output
+// 🎨 Pretty CLI output
 function printLine(required, text) {
-  if (required) console.log(`${String.fromCharCode(10004)} ${text}`.green);
-  else console.log(`${String.fromCharCode(10006)} ${text}`.red);
+  if (required) console.log(`✔ ${text}`.green);
+  else console.log(`✖ ${text}`.red);
 }
 
-// Simple HTTP server for ZAP scan
-function startServer() {
+// 🌐 Simple server for DAST/ZAP scanning
+function startServer(today) {
   const PORT = process.env.PORT || 3000;
   const server = http.createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', message: '🛡️ Healthy and secure!' }));
+      return;
+    }
+
+    if (req.url === '/weather') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ location: location, weather: today }));
+      return;
+    }
+
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('✅ Weather app running — ready for ZAP scan!\n');
   });
 
   server.listen(PORT, () => {
-    console.log(`🌦️ App running at http://localhost:${PORT}`.cyan);
+    console.log(`\n🌦️ App running securely at http://localhost:${PORT}`.yellow);
   });
 }
