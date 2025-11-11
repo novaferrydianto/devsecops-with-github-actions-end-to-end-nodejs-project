@@ -1,27 +1,12 @@
 version: 2
-
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    labels:
-      - ci
-      - maintenance
-    commit-message:
-      prefix: "chore(actions):"
-    rebase-strategy: "auto"
-
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - security
-    commit-message:
-      prefix: "fix(deps):"
-      include: scope
-    rebase-strategy: "auto"
+      interval: "weekly"
+    open-pull-requests-limit: 5

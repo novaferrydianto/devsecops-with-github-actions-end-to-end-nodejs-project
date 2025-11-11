@@ -1,0 +1,70 @@
+name: CD — Staging & Production (GKE + OIDC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "staging or production"
+        required: true
+        default: "staging"
+      image_tag:
+        description: "Image tag to deploy (e.g., sha-xxxx)"
+        required: true
+
+concurrency:
+  group: cd-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GAR_LOCATION: ${{ secrets.GAR_LOCATION }}
+  GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+  GKE_LOCATION: ${{ secrets.GKE_LOCATION }}
+  NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
+  DEPLOYMENT: ${{ secrets.K8S_DEPLOYMENT }}
+  REPOSITORY: ${{ secrets.GAR_REPOSITORY }}
+  IMAGE: ${{ secrets.IMAGE_NAME }}
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment == 'production' && secrets.APP_URL_PROD || secrets.APP_URL_STG }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🔐 Auth to GCP via OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: 🧰 Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: ☁️ Get GKE Credentials
+        run: |
+          gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_LOCATION" --project "$PROJECT_ID"
+
+      - name: 🛠️ Patch Deployment Image
+        run: |
+          kubectl -n "$NAMESPACE" set image deployment/$DEPLOYMENT $IMAGE=$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ inputs.image_tag }}
+          kubectl -n "$NAMESPACE" rollout status deployment/$DEPLOYMENT --timeout=300s
+
+      - name: 🔙 Smoke Test (placeholder)
+        run: |
+          kubectl -n "$NAMESPACE" get pods -l app=$IMAGE -o wide || true
+
+      - name: 🧾 Deploy Summary
+        run: |
+          echo "## 🚀 Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ inputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
