@@ -1,4 +1,4 @@
-name: Build, Test, and Secure Node.js App
+name: Build, Test, and Secure Node.js App 🛡️
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
   # ============================================================
   build_and_sast:
     if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
-    name: Build, Test & SAST
+    name: 🧱 Build, Test & SAST
     runs-on: ubuntu-latest
 
     steps:
@@ -45,7 +45,7 @@ jobs:
       - run: npm ci
       - run: npm test
 
-      - name: Generate Coverage
+      - name: 📊 Coverage
         run: |
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
@@ -55,7 +55,7 @@ jobs:
           name: coverage-report
           path: coverage/
 
-      - name: SonarCloud SAST
+      - name: 🚀 SonarCloud SAST
         uses: sonarsource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -66,12 +66,12 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
   # ============================================================
-  # 2) SCA — SNYK
+  # 2) SCA — Snyk
   # ============================================================
   sca_snyk:
     needs: build_and_sast
     runs-on: ubuntu-latest
-    name: SCA — Snyk
+    name: 🧩 SCA — Snyk
 
     steps:
       - uses: actions/checkout@v5
@@ -82,7 +82,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Snyk Vulnerability Scan
+      - name: 🕵️ Snyk Vulnerability Scan
         uses: snyk/actions/node@v1
         continue-on-error: true
         env:
@@ -91,12 +91,11 @@ jobs:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
 
-      - name: Enforce High/Critical Policy
+      - name: 📊 Enforce Policy
         run: |
           HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
           CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
           if [ $((HIGH + CRIT)) -gt 0 ]; then
-            echo "High/Critical vulnerabilities found!"
             exit 1
           fi
 
@@ -130,49 +129,54 @@ jobs:
           path: trivy-report.txt
 
   # ============================================================
-  # 4) PODMAN BUILD + PUSH
+  # 4) PODMAN BUILD + PUSH (with output fix)
   # ============================================================
   podman_build_push:
     needs: trivy_fs
     runs-on: ubuntu-latest
-    name: Podman Build & Push
+    name: 📦 Podman Build & Push
+
+    outputs:
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
+      image_repo: ${{ steps.meta.outputs.image_repo }}
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: Prepare Metadata
+      - id: meta
+        name: Prepare Metadata
         run: |
-          echo "SHA_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
-          echo "IMAGE_REPO=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
+          echo "sha_tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "image_repo=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> $GITHUB_OUTPUT
 
       - name: Install Podman
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: Login DockerHub (Podman)
+      - name: 🔐 Podman Login → DockerHub
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
           podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Podman Build
+      - name: 🏗 Build Image
         run: |
           podman build \
-            -t "$IMAGE_REPO:$SHA_TAG" \
-            -t "$IMAGE_REPO:latest" .
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}" \
+            -t "${{ steps.meta.outputs.image_repo }}:latest" .
 
-      - name: Push Images
+      - name: 📤 Push Images
         run: |
-          podman push "$IMAGE_REPO:$SHA_TAG"
-          podman push "$IMAGE_REPO:latest"
+          podman push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}"
+          podman push "${{ steps.meta.outputs.image_repo }}:latest"
 
   # ============================================================
-  # 5) COSIGN v3 SIGNING + BUNDLE EXPORT
+  # 5) COSIGN v3 SIGNING + BUNDLE EXPORT (using outputs)
   # ============================================================
   cosign_sign:
     needs: podman_build_push
     runs-on: ubuntu-latest
-    name: Cosign v3 Signing
+    name: 🔏 Cosign v3 Signing
     env:
       COSIGN_EXPERIMENTAL: "1"
 
@@ -183,19 +187,19 @@ jobs:
       - name: Prepare Cosign Key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
 
-      - name: Cosign v3 Sign
+      - name: ✍️ Sign Container (Cosign v3)
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           cosign sign \
             --key cosign.key \
-            "$IMAGE_REPO:$SHA_TAG"
+            "${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}"
 
-      - name: Export Cosign Bundle (v3)
+      - name: 📦 Export Cosign Bundle
         run: |
           cosign save-bundle \
             --output cosign-bundle.json \
-            "$IMAGE_REPO:$SHA_TAG"
+            "${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -208,7 +212,7 @@ jobs:
   dast_zap:
     needs: sca_snyk
     runs-on: ubuntu-latest
-    name: OWASP ZAP
+    name: 🎯 OWASP ZAP
     continue-on-error: true
 
     steps:
@@ -225,7 +229,7 @@ jobs:
           nohup npm start &>/dev/null &
           sleep 10
 
-      - name: Run ZAP Full Scan
+      - name: ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -252,16 +256,16 @@ jobs:
       - cosign_sign
       - dast_zap
     runs-on: ubuntu-latest
-    name: DevSecOps Summary
+    name: 🧾 DevSecOps Summary
 
     steps:
       - run: |
-          echo "## DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧠 DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Build & Test ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- SAST (SonarCloud) ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- SCA (Snyk) → snyk-report.json" >> $GITHUB_STEP_SUMMARY
+          echo "- SAST ✓ (SonarCloud)" >> $GITHUB_STEP_SUMMARY
+          echo "- SCA ✓ (Snyk)" >> $GITHUB_STEP_SUMMARY
           echo "- Trivy FS → trivy-report.txt" >> $GITHUB_STEP_SUMMARY
-          echo "- Podman Image → $IMAGE_REPO:$SHA_TAG" >> $GITHUB_STEP_SUMMARY
-          echo "- Cosign Signature ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- Cosign Bundle → cosign-bundle.json" >> $GITHUB_STEP_SUMMARY
+          echo "- Podman Image → ${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign v3 Signature ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign Bundle Exported ✓" >> $GITHUB_STEP_SUMMARY
           echo "- ZAP Report → report_html.html" >> $GITHUB_STEP_SUMMARY
