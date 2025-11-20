@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [master]
   schedule:
-    - cron: '0 3 * * *' # daily
+    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       run_zap_only:
@@ -15,7 +15,7 @@ on:
         default: 'false'
 
 permissions:
-  id-token: write       # Required for Cosign OIDC
+  id-token: write        # for Cosign OIDC signing
   contents: read
   security-events: write
   actions: read
@@ -27,18 +27,17 @@ env:
 # ===================================================================
 # 🧱 BUILD, TEST, COVERAGE, SAST
 # ===================================================================
+
 jobs:
   build_and_sast:
-    if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
-    name: 🧱 Build, Unit Tests, and SAST (SonarCloud)
+    name: 🧱 Build, Unit Tests & SAST
     runs-on: ubuntu-latest
+    if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
 
     steps:
-      - name: 🛒 Checkout Repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: 🧩 Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -46,7 +45,7 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🧪 Run Unit Tests
+      - name: 🧪 Run Tests
         run: npm test
 
       - name: 📊 Coverage (NYC + Mocha)
@@ -54,14 +53,13 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
-      - name: 📤 Upload Coverage
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
 
-      - name: 🚀 SonarCloud Scan (SAST)
+      - name: 🚀 SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -72,26 +70,24 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
 # ===================================================================
-# 🧩 SOFTWARE COMPOSITION ANALYSIS (Snyk)
+# 🧩 SCA (SNYK)
 # ===================================================================
+
   sca_snyk:
-    if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
     name: 🧩 Software Composition Analysis (Snyk)
     runs-on: ubuntu-latest
     needs: build_and_sast
+    if: ${{ inputs.run_zap_only == 'false' }}
 
     steps:
-      - name: 🛒 Checkout Repository
-        uses: actions/checkout@v5
-
-      - name: 🧩 Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: npm ci
 
-      - name: 🕵️ Snyk Test
+      - name: 🕵️ Snyk Scan
         uses: snyk/actions/node@9adf32b1121593767fc3c057af55b55db032dc04
         continue-on-error: true
         env:
@@ -100,27 +96,19 @@ jobs:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
 
-      - name: 📊 Enforce Severity Policy
+      - name: 📊 Enforce Snyk Policy
         run: |
           HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
           CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
-          if [ $((HIGH + CRIT)) -gt 0 ]; then
-            echo "🚨 High/Critical issues found"
-            exit 1
-          fi
-          echo "✅ No high/critical vulnerabilities."
+          if [ $((HIGH + CRIT)) -gt 0 ]; then exit 1; fi
 
       - name: 🪶 Create Issue (Snyk)
         if: ${{ failure() }}
         uses: peter-evans/create-issue-from-file@v6
         with:
-          title: "🚨 Snyk High/Critical Vulnerabilities"
+          title: "🚨 Snyk High/Critical"
           content-filepath: snyk-report.json
-          labels: |
-            security
-            snyk
-            high-risk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          labels: security, snyk, high-risk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -128,20 +116,20 @@ jobs:
           path: snyk-report.json
 
 # ===================================================================
-# 🔍 TRIVY FILESYSTEM SCAN
+# 🔍 TRIVY FS/IaC
 # ===================================================================
+
   optional_trivy:
-    if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
-    name: 🧠 Container & IaC Security (Trivy)
+    name: 🔍 Trivy File System Scan
     runs-on: ubuntu-latest
     needs: sca_snyk
     continue-on-error: true
+    if: ${{ inputs.run_zap_only == 'false' }}
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: 🔍 Trivy FS Scan
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
+      - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -154,11 +142,7 @@ jobs:
         with:
           title: "🚨 Trivy Critical Vulnerabilities"
           content-filepath: trivy-report.txt
-          labels: |
-            security
-            trivy
-            high-risk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          labels: security, trivy, high-risk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -166,10 +150,11 @@ jobs:
           path: trivy-report.txt
 
 # ===================================================================
-# 🎯 OWASP ZAP DAST
+# 🎯 DAST (OWASP ZAP)
 # ===================================================================
+
   dast_zap:
-    name: 🎯 Dynamic App Security Testing (OWASP ZAP)
+    name: 🎯 OWASP ZAP DAST
     runs-on: ubuntu-latest
     needs: [sca_snyk]
     continue-on-error: true
@@ -181,17 +166,12 @@ jobs:
         run: |
           npm ci
           nohup npm start &
-          echo "Waiting for app…"
           for i in {1..40}; do
-            if curl -sSf http://localhost:3000/health >/dev/null; then
-              echo "App Ready!"
-              break
-            fi
+            if curl -sSf http://localhost:3000/health >/dev/null; then break; fi
             sleep 5
           done
 
-      - name: 🧪 Run ZAP Full Scan
-        uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c
+      - uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: 'http://localhost:3000'
@@ -199,10 +179,10 @@ jobs:
           fail_action: false
           artifact_name: zap-results-${{ github.run_attempt }}
 
-      - name: Parse ZAP High-Risk
+      - name: Parse ZAP Issues
         run: |
           if [ -f report_json.json ]; then
-            HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l || true)
+            HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l)
             echo "ZAP_HIGH_COUNT=$HIGH" >> $GITHUB_ENV
             grep -A3 '"risk":"High"' report_json.json | head -n 20 > zap-high.txt || true
           else
@@ -213,13 +193,9 @@ jobs:
         if: env.ZAP_HIGH_COUNT != '0'
         uses: peter-evans/create-issue-from-file@v6
         with:
-          title: "🔥 ZAP High-Risk Vulnerabilities"
+          title: "🔥 ZAP High Risk"
           content-filepath: zap-high.txt
-          labels: |
-            security
-            zap
-            high-risk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          labels: security, zap, high-risk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -227,44 +203,53 @@ jobs:
           path: |
             report_html.html
             report_json.json
-          overwrite: true
 
 # ===================================================================
-# 🐳 PODMAN BUILD & PUSH (NEW)
+# 🐳 FIXED PODMAN BUILD + PUSH  🚀
 # ===================================================================
+
   container_build_and_push:
-    name: 🐳 Podman Build & Push to DockerHub
+    name: 🐳 Podman Build & Push
     runs-on: ubuntu-latest
     needs: [sca_snyk, optional_trivy]
-    if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
+    if: ${{ inputs.run_zap_only == 'false' }}
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install Podman
+      - name: 🔧 Install Podman (with registry fix)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y podman
+          mkdir -p ~/.config/containers
+          cat <<EOF > ~/.config/containers/registries.conf [registries.search] registries=["docker.io"]
+                EOF
 
-      - name: DockerHub Login
+      - name: 🔑 DockerHub Login (safe mode)
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io \
-            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          podman login docker.io \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+            -p "${{ secrets.DOCKERHUB_TOKEN }}"
 
-      - name: Build Image
+      - name: 🧱 Build Image
         run: podman build -t weather-app:latest .
 
-      - name: Tag Image
-        run: podman tag weather-app:latest docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest
+      - name: 🏷️ Tag Image
+        run: |
+          podman tag weather-app:latest \
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest
 
-      - name: Push Image
-        run: podman push docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest
+      - name: 📤 Push Latest
+        run: |
+          podman push \
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest
 
 # ===================================================================
-# 🔐 COSIGN SIGNING + SHA TAGGING + SBOM
+# 🔐 SHA TAGGING + COSIGN SIGNING + SBOM
 # ===================================================================
+
   container_signing_and_sha_tagging:
-    name: 🔐 Cosign Signing + SHA Tagging + SBOM
+    name: 🔐 Signing + SHA Tags + SBOM
     runs-on: ubuntu-latest
     needs: container_build_and_push
 
@@ -279,51 +264,55 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y podman
+          mkdir -p ~/.config/containers
+          echo -e "[registries.search]\nregistries=['docker.io']" > ~/.config/containers/registries.conf
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.4.0
+      - uses: sigstore/cosign-installer@v3.4.0
 
       - name: Login DockerHub
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io \
-            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          podman login docker.io \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+            -p "${{ secrets.DOCKERHUB_TOKEN }}"
 
-      - name: Generate Tags
+      - name: Generate SHA Tags
         id: tags
         run: |
           SHA=${GITHUB_SHA}
           SHORT=$(echo $SHA | cut -c1-7)
           BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')
-
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "short=$SHORT" >> $GITHUB_OUTPUT
           echo "branch=${BRANCH}-${SHORT}" >> $GITHUB_OUTPUT
 
-      - name: Tag Images
+      - name: Apply Tags
         run: |
-          podman pull docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest
-          podman tag docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.sha }}
-          podman tag docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.short }}
-          podman tag docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:latest docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.branch }}
+          IMG="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app"
+          podman pull $IMG:latest
+          podman tag $IMG:latest $IMG:${{ steps.tags.outputs.sha }}
+          podman tag $IMG:latest $IMG:${{ steps.tags.outputs.short }}
+          podman tag $IMG:latest $IMG:${{ steps.tags.outputs.branch }}
 
-      - name: Push All Tags
+      - name: Push Tags
         run: |
-          podman push docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.sha }}
-          podman push docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.short }}
-          podman push docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.branch }}
+          IMG="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app"
+          podman push $IMG:${{ steps.tags.outputs.sha }}
+          podman push $IMG:${{ steps.tags.outputs.short }}
+          podman push $IMG:${{ steps.tags.outputs.branch }}
 
-      - name: Cosign Signing (OIDC)
+      - name: Cosign Sign (OIDC)
         run: |
-          cosign sign --keyless docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.sha }}
+          cosign sign --keyless \
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.sha }}
 
-      - name: Generate SBOM
-        uses: anchore/syft-action@master
+      - name: Generate SBOM (Syft)
+        uses: anchore/syft-action@v0.5.1
         with:
           image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/weather-app:${{ steps.tags.outputs.sha }}
           format: spdx-json
           output-file: sbom.json
 
-      - name: SBOM Attestation (Cosign)
+      - name: Sign SBOM Attestation
         run: |
           cosign attest \
             --predicate sbom.json \
@@ -333,26 +322,30 @@ jobs:
 # ===================================================================
 # 🧾 SUMMARY
 # ===================================================================
+
   summary:
-    name: 🧾 Generate DevSecOps Summary
+    name: 🧾 DevSecOps Summary
     runs-on: ubuntu-latest
-    needs: [
-      build_and_sast,
-      sca_snyk,
-      optional_trivy,
-      dast_zap,
-      container_build_and_push,
-      container_signing_and_sha_tagging
-    ]
+    needs:
+      [
+        build_and_sast,
+        sca_snyk,
+        optional_trivy,
+        dast_zap,
+        container_build_and_push,
+        container_signing_and_sha_tagging
+      ]
 
     steps:
-      - name: 📜 Summary Report
+      - name: 📜 Summary
         run: |
           echo "## 🧠 DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Build & Test: ✔️" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage Report Uploaded" >> $GITHUB_STEP_SUMMARY
-          echo "- Snyk Scan: ✔️" >> $GITHUB_STEP_SUMMARY
-          echo "- Trivy Scan: ✔️" >> $GITHUB_STEP_SUMMARY
-          echo "- ZAP DAST: ✔️" >> $GITHUB_STEP_SUMMARY
-          echo "- Docker Image Built & Pushed" >> $GITHUB_STEP_SUMMARY
-          echo "- Cosign Signing + SBOM Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Build & Test ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- SAST (SonarCloud) ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- SCA (Snyk) ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- Trivy FS/IaC ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- ZAP DAST ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- Podman Build & Push ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- SHA Tagging ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign Signing ✔️" >> $GITHUB_STEP_SUMMARY
+          echo "- SBOM Attestation ✔️" >> $GITHUB_STEP_SUMMARY
