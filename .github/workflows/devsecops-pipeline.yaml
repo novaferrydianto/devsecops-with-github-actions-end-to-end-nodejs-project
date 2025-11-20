@@ -184,7 +184,7 @@ jobs:
     steps:
       # FIXED: Updated to v3.5.0 and removed specific release pinning
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.5.0 
+        uses: sigstore/cosign-installer@v3.7.0
 
       - name: Write private key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
