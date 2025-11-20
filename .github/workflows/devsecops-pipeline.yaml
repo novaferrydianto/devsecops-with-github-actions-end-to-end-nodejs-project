@@ -292,6 +292,6 @@ jobs:
           echo "- ✅ Snyk SCA + Trivy FS (artifacts: security-reports)" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Podman Build & Push → ${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Cosign Signature exported (cosign.sig)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Smart ZAP (${ { github.event_name } }) → zap-report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Smart ZAP (${{ github.event_name }}) → zap-report" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Pipeline Completed Successfully 🎉"
+          echo "Pipeline Completed Successfully 🎉" >> "$GITHUB_STEP_SUMMARY"
