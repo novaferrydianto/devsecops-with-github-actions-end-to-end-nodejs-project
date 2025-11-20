@@ -19,7 +19,7 @@ permissions:
   security-events: write
   actions: read
   issues: write
-  packages: write # Tambahan: Diperlukan jika push ke GHCR, optional untuk DockerHub tapi good practice
+  packages: write
 
 env:
   NODE_VERSION: 20
@@ -36,7 +36,7 @@ jobs:
     name: 🧱 Build, Test & SAST
 
     steps:
-      - uses: actions/checkout@v4 # FIXED: v5 -> v4
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -75,7 +75,7 @@ jobs:
     name: 🧩 SCA — Snyk
 
     steps:
-      - uses: actions/checkout@v4 # FIXED: v5 -> v4
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -116,7 +116,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4 # FIXED: v5 -> v4
+      - uses: actions/checkout@v4
 
       - uses: aquasecurity/trivy-action@0.22.0
         with:
@@ -143,7 +143,7 @@ jobs:
       image_repo: ${{ steps.meta.outputs.image_repo }}
 
     steps:
-      - uses: actions/checkout@v4 # FIXED: v5 -> v4
+      - uses: actions/checkout@v4
 
       - id: meta
         name: Prepare Metadata
@@ -173,22 +173,21 @@ jobs:
           podman push "${{ steps.meta.outputs.image_repo }}:latest"
 
 # ===================================================================
-# 5) COSIGN v3 — SIGN + BUNDLE EXPORT
+# 5) COSIGN v2 — SIGN + EXPORT SIGNATURE
 # ===================================================================
   cosign_sign:
     needs: podman_build_push
     runs-on: ubuntu-latest
-    name: 🔏 Cosign v3 Signing
-    # Experimental flag removed (not needed for key-based signing)
+    name: 🔏 Cosign Signing
 
     steps:
-      # FIXED: Updated to v3.5.0 and removed specific release pinning
-      #- name: Install Cosign
-      #  uses: sigstore/cosign-installer@v3.7.0
-      - name: Install Cosign Manually (Robust)
+      # METODE INSTALASI BINARY MANUAL (PALING ROBUST)
+      - name: Install Cosign Manually (v2.4.1)
         run: |
-          wget https://github.com/sigstore/cosign/releases/download/v3.0.2/cosign_3.0.2_amd64.deb
-          sudo dpkg -i cosign_3.0.2_amd64.deb
+          wget https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64
+          mv cosign-linux-amd64 cosign
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/cosign
           cosign version
 
       - name: 🔐 DockerHub Login
@@ -200,7 +199,7 @@ jobs:
       - name: Write private key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
 
-      - name: ✍️ Sign Container (Cosign v3)
+      - name: ✍️ Sign Container
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}          
@@ -210,18 +209,19 @@ jobs:
             -y \
             "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
           
-      - name: 📦 Export Cosign Bundle
+      # MENGGUNAKAN METODE V2 (Download Signature) AGAR KOMPATIBEL
+      - name: 📦 Download Signature
         env:
           FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
         run: |
-          cosign bundle save \
-            --bundle cosign-bundle.json \
-            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
+          cosign download signature \
+            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}" \
+            --output-file cosign.sig
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cosign-bundle
-          path: cosign-bundle.json
+          name: cosign-signature
+          path: cosign.sig
 
 # ===================================================================
 # 6) ZAP DAST
@@ -233,7 +233,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4 # FIXED: v5 -> v4
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -247,7 +247,7 @@ jobs:
           sleep 10
 
       - name: ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.10.0 # Changed to stable version compatible with checkout
+        uses: zaproxy/action-full-scan@v0.10.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: "http://localhost:3000"
@@ -283,6 +283,6 @@ jobs:
           echo "- SCA ✓ (Snyk)" >> $GITHUB_STEP_SUMMARY
           echo "- Trivy FS → trivy-report.txt" >> $GITHUB_STEP_SUMMARY
           echo "- Podman Image → ${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Cosign v3 Signature ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- Cosign Bundle Exported ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign Signature ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign Evidence Exported (cosign.sig) ✓" >> $GITHUB_STEP_SUMMARY
           echo "- ZAP Report → report_html.html" >> $GITHUB_STEP_SUMMARY
