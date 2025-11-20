@@ -129,10 +129,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Sign Image
     steps:
-      - name: Install Cosign (Manual v2.4.1)
+      - name: Install Cosign
         run: |
           wget https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64
-          mv cosign-linux-amd64 cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/cosign
+          mv cosign-linux-amd64 cosign
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/cosign
+          cosign version
       
       - name: DockerHub Login
         uses: docker/login-action@v3
