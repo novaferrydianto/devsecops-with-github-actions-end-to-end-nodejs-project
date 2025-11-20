@@ -25,14 +25,14 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: weather-app
 
+# ===================================================================
+# 1) BUILD + TEST + SAST
+# ===================================================================
 jobs:
-  # ============================================================
-  # 1) BUILD + TEST + SAST
-  # ============================================================
   build_and_sast:
     if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
-    name: 🧱 Build, Test & SAST
     runs-on: ubuntu-latest
+    name: 🧱 Build, Test & SAST
 
     steps:
       - uses: actions/checkout@v5
@@ -65,9 +65,9 @@ jobs:
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
-  # ============================================================
-  # 2) SCA — Snyk
-  # ============================================================
+# ===================================================================
+# 2) SCA — Snyk
+# ===================================================================
   sca_snyk:
     needs: build_and_sast
     runs-on: ubuntu-latest
@@ -104,9 +104,9 @@ jobs:
           name: snyk-report
           path: snyk-report.json
 
-  # ============================================================
-  # 3) TRIVY FS
-  # ============================================================
+# ===================================================================
+# 3) TRIVY FS SCAN
+# ===================================================================
   trivy_fs:
     needs: sca_snyk
     runs-on: ubuntu-latest
@@ -128,9 +128,9 @@ jobs:
           name: trivy-report
           path: trivy-report.txt
 
-  # ============================================================
-  # 4) PODMAN BUILD + PUSH (with output fix)
-  # ============================================================
+# ===================================================================
+# 4) PODMAN BUILD + PUSH
+# ===================================================================
   podman_build_push:
     needs: trivy_fs
     runs-on: ubuntu-latest
@@ -154,7 +154,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: 🔐 Podman Login → DockerHub
+      - name: 🔐 DockerHub Login (Podman non-TTY fix)
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
           podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
@@ -170,9 +170,9 @@ jobs:
           podman push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}"
           podman push "${{ steps.meta.outputs.image_repo }}:latest"
 
-  # ============================================================
-  # 5) COSIGN v3 SIGNING + BUNDLE EXPORT (using outputs)
-  # ============================================================
+# ===================================================================
+# 5) COSIGN v3 — SIGN + BUNDLE EXPORT
+# ===================================================================
   cosign_sign:
     needs: podman_build_push
     runs-on: ubuntu-latest
@@ -184,7 +184,7 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.4.0
 
-      - name: Prepare Cosign Key
+      - name: Write private key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
 
       - name: ✍️ Sign Container (Cosign v3)
@@ -197,8 +197,8 @@ jobs:
 
       - name: 📦 Export Cosign Bundle
         run: |
-          cosign save-bundle \
-            --output cosign-bundle.json \
+          cosign bundle save \
+            --bundle cosign-bundle.json \
             "${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}"
 
       - uses: actions/upload-artifact@v4
@@ -206,9 +206,9 @@ jobs:
           name: cosign-bundle
           path: cosign-bundle.json
 
-  # ============================================================
-  # 6) OWASP ZAP DAST
-  # ============================================================
+# ===================================================================
+# 6) ZAP DAST
+# ===================================================================
   dast_zap:
     needs: sca_snyk
     runs-on: ubuntu-latest
@@ -244,9 +244,9 @@ jobs:
             report_html.html
             report_json.json
 
-  # ============================================================
-  # 7) FINAL SUMMARY
-  # ============================================================
+# ===================================================================
+# 7) FINAL SUMMARY
+# ===================================================================
   summary:
     needs:
       - build_and_sast
