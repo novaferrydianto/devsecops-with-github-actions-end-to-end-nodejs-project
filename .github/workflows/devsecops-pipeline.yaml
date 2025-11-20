@@ -192,17 +192,20 @@ jobs:
       - name: ✍️ Sign Container (Cosign v3)
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}          
         run: |
           cosign sign \
             --key cosign.key \
             -y \
-            "${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}"
-
+            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
+          
       - name: 📦 Export Cosign Bundle
+        env:
+          FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
         run: |
           cosign bundle save \
             --bundle cosign-bundle.json \
-            "${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}"
+            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
 
       - uses: actions/upload-artifact@v4
         with:
