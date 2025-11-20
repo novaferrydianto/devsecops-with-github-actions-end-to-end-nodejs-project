@@ -10,15 +10,15 @@ on:
   workflow_dispatch:
     inputs:
       run_zap_only:
-        description: 'Run only OWASP ZAP DAST (skip other jobs)'
+        description: "Run only OWASP ZAP"
         required: false
-        default: 'false'
+        default: "false"
 
 permissions:
   contents: read
+  security-events: write
   actions: read
   issues: write
-  security-events: write
 
 env:
   NODE_VERSION: 20
@@ -26,13 +26,13 @@ env:
   IMAGE_NAME: weather-app
 
 # ============================================================
-# 1) BUILD + TEST + COVERAGE + SAST
+# 1) BUILD + TEST + SAST
 # ============================================================
 jobs:
   build_and_sast:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only == 'false' }}
+    if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
+    name: 🧱 Build, Test & SAST
     runs-on: ubuntu-latest
-    name: 🧱 Build • Unit Tests • SAST
 
     steps:
       - uses: actions/checkout@v5
@@ -42,19 +42,15 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: 📦 Install Dependencies
-        run: npm ci
+      - run: npm ci
+      - run: npm test
 
-      - name: 🧪 Unit Tests
-        run: npm test
-
-      - name: 📊 Code Coverage
+      - name: 📊 Coverage
         run: |
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: coverage-report
           path: coverage/
@@ -70,13 +66,12 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
 # ============================================================
-# 2) SOFTWARE COMPOSITION ANALYSIS — SNYK
+# 2) SCA (SNYK)
 # ============================================================
   sca_snyk:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only == 'false' }}
-    runs-on: ubuntu-latest
     needs: build_and_sast
-    name: 🧩 SCA via Snyk
+    runs-on: ubuntu-latest
+    name: 🧩 SCA — Snyk
 
     steps:
       - uses: actions/checkout@v5
@@ -88,7 +83,7 @@ jobs:
       - run: npm ci
 
       - name: 🕵️ Snyk Scan
-        uses: snyk/actions/node@9adf32b1121593767fc3c057af55b55db032dc04
+        uses: snyk/actions/node@v1
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -100,15 +95,10 @@ jobs:
         run: |
           HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
           CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
-          [ $((HIGH + CRIT)) -gt 0 ] && exit 1 || echo "No high/critical vulns"
-
-      - uses: peter-evans/create-issue-from-file@v6
-        if: failure()
-        with:
-          title: "🚨 Snyk High/Critical Vulnerabilities"
-          content-filepath: snyk-report.json
-          labels: security, snyk, high-risk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          if [ $((HIGH + CRIT)) -gt 0 ]; then
+            echo "Found high/critical vulns!"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -116,33 +106,23 @@ jobs:
           path: snyk-report.json
 
 # ============================================================
-# 3) TRIVY FS / IAC SCAN
+# 3) TRIVY (FS)
 # ============================================================
   trivy_fs:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only == 'false' }}
-    runs-on: ubuntu-latest
     needs: sca_snyk
+    runs-on: ubuntu-latest
     name: 🔍 Trivy FS Scan
     continue-on-error: true
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: 🔍 Trivy Scan (Filesystem)
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
+      - uses: aquasecurity/trivy-action@v0.33.1
         with:
           scan-type: fs
           ignore-unfixed: true
           format: table
           output: trivy-report.txt
-
-      - uses: peter-evans/create-issue-from-file@v6
-        if: failure()
-        with:
-          title: "🚨 Trivy Critical Findings"
-          content-filepath: trivy-report.txt
-          labels: security, trivy, high-risk
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -150,95 +130,80 @@ jobs:
           path: trivy-report.txt
 
 # ============================================================
-# 4) PODMAN BUILD • TAG • PUSH
+# 4) PODMAN BUILD + PUSH
 # ============================================================
   podman_build_push:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only == 'false' }}
-    runs-on: ubuntu-latest
     needs: trivy_fs
+    runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: 🧮 Prepare Tags
+      - name: Prep image metadata
         run: |
           echo "SHA_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
           echo "IMAGE_REPO=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
 
-      - name: 🧰 Install Podman
+      - name: Install Podman
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: 🔐 DockerHub Login
+      - name: 🔐 Login DockerHub via Podman
         run: |
-          podman login ${{ env.REGISTRY }} \
-            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
-            -p "${{ secrets.DOCKERHUB_TOKEN }}"
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+          podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: 🏗️ Build Image
+      - name: 🏗 Build Image
         run: |
           podman build \
             -t "$IMAGE_REPO:$SHA_TAG" \
             -t "$IMAGE_REPO:latest" .
 
-      - name: 📤 Push Images
+      - name: 📤 Push Image
         run: |
           podman push "$IMAGE_REPO:$SHA_TAG"
           podman push "$IMAGE_REPO:latest"
 
-      - name: 🔎 Show Pushed Images
-        run: |
-          echo "Pushed:"
-          echo "$IMAGE_REPO:$SHA_TAG"
-          echo "$IMAGE_REPO:latest"
-
 # ============================================================
-# 5) CONTAINER SIGNING + SBOM (COSIGN)
+# 5) COSIGN v3 BUNDLE SIGNING
 # ============================================================
-  sign_and_sbom:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_zap_only == 'false' }}
-    runs-on: ubuntu-latest
+  cosign_sign:
     needs: podman_build_push
-    name: ✍️ Signing + SBOM
+    runs-on: ubuntu-latest
+    name: 🔏 Cosign v3 — Bundle Signing
     env:
       COSIGN_EXPERIMENTAL: "1"
 
     steps:
-      - uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: v2.4.1
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.4.0
 
-      - name: 🔐 Load Cosign Key
-        run: |
-          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+      - name: Prepare key
+        run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
 
-      - name: ✍️ Sign Image
+      - name: ✍️ Sign image (Cosign v3 bundle)
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          cosign sign --key cosign.key "$IMAGE_REPO:$SHA_TAG"
-
-      - name: 📦 SBOM via Trivy
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
-        with:
-          image-ref: "$IMAGE_REPO:$SHA_TAG"
-          format: spdx-json
-          output: sbom.json
+          cosign sign \
+            --key cosign.key \
+            --bundle cosign-bundle.json \
+            "$IMAGE_REPO:$SHA_TAG"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sbom-$SHA_TAG
-          path: sbom.json
+          name: cosign-bundle
+          path: cosign-bundle.json
 
 # ============================================================
-# 6) ZAP DAST SCAN
+# 6) DAST — OWASP ZAP
 # ============================================================
   dast_zap:
-    runs-on: ubuntu-latest
     needs: sca_snyk
-    name: 🎯 ZAP Full Scan
+    runs-on: ubuntu-latest
+    name: 🎯 OWASP ZAP
     continue-on-error: true
 
     steps:
@@ -250,65 +215,46 @@ jobs:
 
       - run: npm ci
 
-      - name: 🚀 Start App
+      - name: Start App
         run: |
           nohup npm start &>/dev/null &
-          for i in {1..40}; do
-            curl -sSf http://localhost:3000/health && break
-            sleep 5
-          done
+          sleep 10
 
-      - uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c
+      - name: Run ZAP
+        uses: zaproxy/action-full-scan@v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          target: http://localhost:3000
-          cmd_options: -a
+          target: "http://localhost:3000"
+          cmd_options: "-a"
           fail_action: false
-          artifact_name: zap-results-${{ github.run_attempt }}
-
-      - name: 📊 Count High Issues
-        run: |
-          HIGH=$(grep -o '"risk":"High"' report_json.json | wc -l || true)
-          echo "ZAP_HIGH=$HIGH" >> $GITHUB_ENV
-
-      - uses: peter-evans/create-issue-from-file@v6
-        if: env.ZAP_HIGH != '0'
-        with:
-          title: "🔥 ZAP High-Risk Findings"
-          content-filepath: report_json.json
-          labels: security, zap, high-risk
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: zap-results-${{ github.run_attempt }}
+          name: zap-results
           path: |
             report_html.html
             report_json.json
-          overwrite: true
 
 # ============================================================
 # 7) FINAL SUMMARY
 # ============================================================
   summary:
-    runs-on: ubuntu-latest
     needs:
       - build_and_sast
       - sca_snyk
       - trivy_fs
       - podman_build_push
-      - sign_and_sbom
+      - cosign_sign
       - dast_zap
-    name: 🧾 DevSecOps Summary
+    runs-on: ubuntu-latest
+    name: 🧾 Final Summary
 
     steps:
-      - name: 🧠 Generate Summary
-        run: |
-          echo "## 🔐 DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- 🧱 Build/Test/SAST Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- 🧩 Snyk SCA: snyk-report.json" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔍 Trivy FS: trivy-report.txt" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 Image: $IMAGE_REPO:$SHA_TAG" >> $GITHUB_STEP_SUMMARY
-          echo "- ✍️ Signed with Cosign" >> $GITHUB_STEP_SUMMARY
-          echo "- 📄 SBOM Available" >> $GITHUB_STEP_SUMMARY
-          echo "- 🎯 ZAP Report: report_html.html" >> $GITHUB_STEP_SUMMARY
+      - run: |
+          echo "## 🧠 DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Build/Test completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Snyk report: snyk-report.json" >> $GITHUB_STEP_SUMMARY
+          echo "- Trivy FS report: trivy-report.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- Podman Image: $IMAGE_REPO:$SHA_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign bundle uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "- ZAP HTML: report_html.html" >> $GITHUB_STEP_SUMMARY
