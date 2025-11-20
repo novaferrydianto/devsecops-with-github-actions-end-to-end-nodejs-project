@@ -1,4 +1,4 @@
-name: Build, Test, and Secure Node.js App 🛡️
+name: Build, Test, and Secure Node.js App
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
   build_and_sast:
     if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    name: 🧱 Build, Test & SAST
+    name: Build, Test & SAST
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
       - run: npm ci
       - run: npm test
 
-      - name: 📊 Coverage
+      - name: Coverage
         run: |
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
@@ -56,7 +56,7 @@ jobs:
           name: coverage-report
           path: coverage/
 
-      - name: 🚀 SonarCloud SAST
+      - name: SonarCloud SAST
         uses: sonarsource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -72,7 +72,7 @@ jobs:
   sca_snyk:
     needs: build_and_sast
     runs-on: ubuntu-latest
-    name: 🧩 SCA — Snyk
+    name: SCA — Snyk
 
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
 
       - run: npm ci
 
-      - name: 🕵️ Snyk Vulnerability Scan
+      - name: Snyk Vulnerability Scan
         uses: snyk/actions/node@v1
         continue-on-error: true
         env:
@@ -92,12 +92,12 @@ jobs:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
 
-      - name: 📊 Enforce Policy
+      - name: Enforce Policy
         run: |
           HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
           CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
           if [ $((HIGH + CRIT)) -gt 0 ]; then
-            echo "⛔ Security Gate Failed: Found High/Critical vulnerabilities."
+            echo "Security Gate Failed: Found High/Critical vulnerabilities."
             exit 1
           fi
 
@@ -112,7 +112,7 @@ jobs:
   trivy_fs:
     needs: sca_snyk
     runs-on: ubuntu-latest
-    name: 🔍 Trivy FS Scan
+    name: Trivy FS Scan
     continue-on-error: true
 
     steps:
@@ -136,7 +136,7 @@ jobs:
   podman_build_push:
     needs: trivy_fs
     runs-on: ubuntu-latest
-    name: 📦 Podman Build & Push
+    name: Podman Build & Push
 
     outputs:
       sha_tag: ${{ steps.meta.outputs.sha_tag }}
@@ -156,18 +156,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: 🔐 DockerHub Login (Podman non-TTY fix)
+      - name: DockerHub Login (Podman non-TTY fix)
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
           podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: 🏗 Build Image
+      - name: Build Image
         run: |
           podman build \
             -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}" \
             -t "${{ steps.meta.outputs.image_repo }}:latest" .
 
-      - name: 📤 Push Images
+      - name: Push Images
         run: |
           podman push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}"
           podman push "${{ steps.meta.outputs.image_repo }}:latest"
@@ -178,7 +178,7 @@ jobs:
   cosign_sign:
     needs: podman_build_push
     runs-on: ubuntu-latest
-    name: 🔏 Cosign Signing
+    name: Cosign Signing
 
     steps:
       # METODE INSTALASI BINARY MANUAL (PALING ROBUST)
@@ -190,7 +190,7 @@ jobs:
           sudo mv cosign /usr/local/bin/cosign
           cosign version
 
-      - name: 🔐 DockerHub Login
+      - name: DockerHub Login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -199,7 +199,7 @@ jobs:
       - name: Write private key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
 
-      - name: ✍️ Sign Container
+      - name: Sign Container
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}          
@@ -210,7 +210,7 @@ jobs:
             "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
           
       # MENGGUNAKAN METODE V2 (Download Signature) AGAR KOMPATIBEL
-      - name: 📦 Download Signature
+      - name: Download Signature
         env:
           FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
         run: |
@@ -229,7 +229,7 @@ jobs:
   dast_zap:
     needs: sca_snyk
     runs-on: ubuntu-latest
-    name: 🎯 OWASP ZAP
+    name: OWASP ZAP
     continue-on-error: true
 
     steps:
@@ -246,13 +246,18 @@ jobs:
           nohup npm start &>/dev/null &
           sleep 10
 
-      - name: ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.10.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          target: "http://localhost:3000"
-          cmd_options: "-a"
-          fail_action: false
+      - name: ZAP Full Scan (Docker-based)
+        run: |
+          chmod 777 .          
+          docker run -v $(pwd):/zap/wrk/:rw \
+            --network="host" \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py \
+            -t http://localhost:3000 \
+            -r report_html.html \
+            -J report_json.json \
+            -a
+        continue-on-error: true 
 
       - uses: actions/upload-artifact@v4
         with:
