@@ -177,6 +177,7 @@ jobs:
       - name: Start App
         run: | 
           nohup npm start &>/dev/null
+          disown $!
           sleep 10
 
       # LOGIKA PINTAR: Cek apakah ini Schedule atau Push biasa
