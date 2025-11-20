@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install nodemon globally for dev
+RUN npm install -g nodemon
+
+# Copy package files first
+COPY package*.json ./
+
+# Install all dependencies including dev deps
+RUN npm install
+
+# Copy source code
+COPY . .
+
+EXPOSE 3000
+
+CMD ["nodemon", "--legacy-watch", "app.js"]
