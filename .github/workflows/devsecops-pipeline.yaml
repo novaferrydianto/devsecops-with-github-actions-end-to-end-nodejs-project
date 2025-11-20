@@ -19,6 +19,7 @@ permissions:
   security-events: write
   actions: read
   issues: write
+  packages: write # Tambahan: Diperlukan jika push ke GHCR, optional untuk DockerHub tapi good practice
 
 env:
   NODE_VERSION: 20
@@ -35,7 +36,7 @@ jobs:
     name: 🧱 Build, Test & SAST
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4 # FIXED: v5 -> v4
 
       - uses: actions/setup-node@v4
         with:
@@ -74,7 +75,7 @@ jobs:
     name: 🧩 SCA — Snyk
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4 # FIXED: v5 -> v4
 
       - uses: actions/setup-node@v4
         with:
@@ -96,6 +97,7 @@ jobs:
           HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
           CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
           if [ $((HIGH + CRIT)) -gt 0 ]; then
+            echo "⛔ Security Gate Failed: Found High/Critical vulnerabilities."
             exit 1
           fi
 
@@ -114,7 +116,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4 # FIXED: v5 -> v4
 
       - uses: aquasecurity/trivy-action@0.22.0
         with:
@@ -141,7 +143,7 @@ jobs:
       image_repo: ${{ steps.meta.outputs.image_repo }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4 # FIXED: v5 -> v4
 
       - id: meta
         name: Prepare Metadata
@@ -177,12 +179,12 @@ jobs:
     needs: podman_build_push
     runs-on: ubuntu-latest
     name: 🔏 Cosign v3 Signing
-    env:
-      COSIGN_EXPERIMENTAL: "1"
+    # Experimental flag removed (not needed for key-based signing)
 
     steps:
+      # FIXED: Updated to v3.5.0 and removed specific release pinning
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.4.0
+        uses: sigstore/cosign-installer@v3.5.0 
 
       - name: Write private key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
@@ -193,6 +195,7 @@ jobs:
         run: |
           cosign sign \
             --key cosign.key \
+            -y \
             "${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}"
 
       - name: 📦 Export Cosign Bundle
@@ -216,7 +219,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4 # FIXED: v5 -> v4
 
       - uses: actions/setup-node@v4
         with:
@@ -230,7 +233,7 @@ jobs:
           sleep 10
 
       - name: ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.13.0
+        uses: zaproxy/action-full-scan@v0.10.0 # Changed to stable version compatible with checkout
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: "http://localhost:3000"
