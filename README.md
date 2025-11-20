@@ -1,6 +1,6 @@
 # 🔐 DevSecOps-Ready Node.js Weather App
 
-[![CI/CD Pipeline](https://github.com/novaferrydianto/weather-app/actions/workflows/devsecops-pipeline.yaml/badge.svg)](...)
+[![CI/CD Pipeline](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions/workflows/devsecops-pipeline.yaml/badge.svg)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions)
 [![Security: Snyk](https://img.shields.io/badge/Security-Snyk-orange)](https://snyk.io/)
 [![Signed with Cosign](https://img.shields.io/badge/Signed_with-Cosign-purple)](https://github.com/sigstore/cosign)
 [![Container: Podman](https://img.shields.io/badge/Container-Podman-892CA0)](https://podman.io/)
