@@ -175,7 +175,9 @@ jobs:
       - run: npm ci
       
       - name: Start App
-        run: nohup npm start &>/dev/null & && sleep 10
+        run: | 
+          nohup npm start &>/dev/null
+          sleep 10
 
       # LOGIKA PINTAR: Cek apakah ini Schedule atau Push biasa
       - name: Determine Scan Type
