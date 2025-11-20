@@ -1,4 +1,4 @@
-name: Build, Test, and Secure Node.js App 🛡️
+name: Build, Test, and Secure Node.js App
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [master]
   schedule:
-    - cron: '0 3 * * *'
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       run_zap_only:
@@ -25,13 +25,13 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: weather-app
 
-# ============================================================
-# 1) BUILD + TEST + SAST
-# ============================================================
 jobs:
+  # ============================================================
+  # 1) BUILD + TEST + SAST
+  # ============================================================
   build_and_sast:
     if: ${{ inputs.run_zap_only == 'false' || github.event_name != 'workflow_dispatch' }}
-    name: 🧱 Build, Test & SAST
+    name: Build, Test & SAST
     runs-on: ubuntu-latest
 
     steps:
@@ -45,7 +45,7 @@ jobs:
       - run: npm ci
       - run: npm test
 
-      - name: 📊 Coverage
+      - name: Generate Coverage
         run: |
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
@@ -55,7 +55,7 @@ jobs:
           name: coverage-report
           path: coverage/
 
-      - name: 🚀 SonarCloud SAST
+      - name: SonarCloud SAST
         uses: sonarsource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -65,13 +65,13 @@ jobs:
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
-# ============================================================
-# 2) SCA (SNYK)
-# ============================================================
+  # ============================================================
+  # 2) SCA — SNYK
+  # ============================================================
   sca_snyk:
     needs: build_and_sast
     runs-on: ubuntu-latest
-    name: 🧩 SCA — Snyk
+    name: SCA — Snyk
 
     steps:
       - uses: actions/checkout@v5
@@ -82,7 +82,7 @@ jobs:
 
       - run: npm ci
 
-      - name: 🕵️ Snyk Scan
+      - name: Snyk Vulnerability Scan
         uses: snyk/actions/node@v1
         continue-on-error: true
         env:
@@ -91,12 +91,12 @@ jobs:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
 
-      - name: 📊 Enforce Policy
+      - name: Enforce High/Critical Policy
         run: |
           HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
           CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
           if [ $((HIGH + CRIT)) -gt 0 ]; then
-            echo "Found high/critical vulns!"
+            echo "High/Critical vulnerabilities found!"
             exit 1
           fi
 
@@ -105,9 +105,9 @@ jobs:
           name: snyk-report
           path: snyk-report.json
 
-# ============================================================
-# 3) TRIVY (FS)
-# ============================================================
+  # ============================================================
+  # 3) TRIVY FS
+  # ============================================================
   trivy_fs:
     needs: sca_snyk
     runs-on: ubuntu-latest
@@ -117,7 +117,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: aquasecurity/trivy-action@v0.33.1
+      - uses: aquasecurity/trivy-action@0.22.0
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -129,18 +129,18 @@ jobs:
           name: trivy-report
           path: trivy-report.txt
 
-# ============================================================
-# 4) PODMAN BUILD + PUSH
-# ============================================================
+  # ============================================================
+  # 4) PODMAN BUILD + PUSH
+  # ============================================================
   podman_build_push:
     needs: trivy_fs
     runs-on: ubuntu-latest
-    name: 📦 Podman Build & Push
+    name: Podman Build & Push
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: Prep image metadata
+      - name: Prepare Metadata
         run: |
           echo "SHA_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
           echo "IMAGE_REPO=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
@@ -150,29 +150,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: 🔐 Login DockerHub via Podman
+      - name: Login DockerHub (Podman)
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
           podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: 🏗 Build Image
+      - name: Podman Build
         run: |
           podman build \
             -t "$IMAGE_REPO:$SHA_TAG" \
             -t "$IMAGE_REPO:latest" .
 
-      - name: 📤 Push Image
+      - name: Push Images
         run: |
           podman push "$IMAGE_REPO:$SHA_TAG"
           podman push "$IMAGE_REPO:latest"
 
-# ============================================================
-# 5) COSIGN v3 BUNDLE SIGNING
-# ============================================================
+  # ============================================================
+  # 5) COSIGN v3 SIGNING + BUNDLE EXPORT
+  # ============================================================
   cosign_sign:
     needs: podman_build_push
     runs-on: ubuntu-latest
-    name: 🔏 Cosign v3 — Bundle Signing
+    name: Cosign v3 Signing
     env:
       COSIGN_EXPERIMENTAL: "1"
 
@@ -180,16 +180,21 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.4.0
 
-      - name: Prepare key
+      - name: Prepare Cosign Key
         run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
 
-      - name: ✍️ Sign image (Cosign v3 bundle)
+      - name: Cosign v3 Sign
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           cosign sign \
             --key cosign.key \
-            --bundle cosign-bundle.json \
+            "$IMAGE_REPO:$SHA_TAG"
+
+      - name: Export Cosign Bundle (v3)
+        run: |
+          cosign save-bundle \
+            --output cosign-bundle.json \
             "$IMAGE_REPO:$SHA_TAG"
 
       - uses: actions/upload-artifact@v4
@@ -197,13 +202,13 @@ jobs:
           name: cosign-bundle
           path: cosign-bundle.json
 
-# ============================================================
-# 6) DAST — OWASP ZAP
-# ============================================================
+  # ============================================================
+  # 6) OWASP ZAP DAST
+  # ============================================================
   dast_zap:
     needs: sca_snyk
     runs-on: ubuntu-latest
-    name: 🎯 OWASP ZAP
+    name: OWASP ZAP
     continue-on-error: true
 
     steps:
@@ -220,7 +225,7 @@ jobs:
           nohup npm start &>/dev/null &
           sleep 10
 
-      - name: Run ZAP
+      - name: Run ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -235,9 +240,9 @@ jobs:
             report_html.html
             report_json.json
 
-# ============================================================
-# 7) FINAL SUMMARY
-# ============================================================
+  # ============================================================
+  # 7) FINAL SUMMARY
+  # ============================================================
   summary:
     needs:
       - build_and_sast
@@ -247,14 +252,16 @@ jobs:
       - cosign_sign
       - dast_zap
     runs-on: ubuntu-latest
-    name: 🧾 Final Summary
+    name: DevSecOps Summary
 
     steps:
       - run: |
-          echo "## 🧠 DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Build/Test completed" >> $GITHUB_STEP_SUMMARY
-          echo "- Snyk report: snyk-report.json" >> $GITHUB_STEP_SUMMARY
-          echo "- Trivy FS report: trivy-report.txt" >> $GITHUB_STEP_SUMMARY
-          echo "- Podman Image: $IMAGE_REPO:$SHA_TAG" >> $GITHUB_STEP_SUMMARY
-          echo "- Cosign bundle uploaded" >> $GITHUB_STEP_SUMMARY
-          echo "- ZAP HTML: report_html.html" >> $GITHUB_STEP_SUMMARY
+          echo "## DevSecOps Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Build & Test ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- SAST (SonarCloud) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- SCA (Snyk) → snyk-report.json" >> $GITHUB_STEP_SUMMARY
+          echo "- Trivy FS → trivy-report.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- Podman Image → $IMAGE_REPO:$SHA_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign Signature ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Cosign Bundle → cosign-bundle.json" >> $GITHUB_STEP_SUMMARY
+          echo "- ZAP Report → report_html.html" >> $GITHUB_STEP_SUMMARY
