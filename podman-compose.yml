@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  weather-app:
+    container_name: weather-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: weather-app:latest
+
+    ports:
+      - "3000:3000"
+
+    # Load environment variables (optional)
+    #env_file:
+    #  - .env
+
+    restart: unless-stopped
+
+    # Rootless-friendly
+    security_opt:
+      - label=disable
+
+    tty: true
+    stdin_open: true
+
+networks:
+  default:
+    driver: bridge
