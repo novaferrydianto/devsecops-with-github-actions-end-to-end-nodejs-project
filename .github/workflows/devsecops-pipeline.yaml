@@ -1,4 +1,4 @@
-name: DevSecOps Pipeline
+name: DevSecOps Pipeline v2
 
 on:
   push:
@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [master]
   schedule:
-    - cron: "0 3 * * *" # Full Scan hanya jam 3 pagi
+    - cron: "0 3 * * *" # Full scan jalan jam 3 pagi
   workflow_dispatch:
+
+concurrency:
+  group: devsecops-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -21,32 +25,50 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: weather-app
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # =================================================================
-  # GROUP 1: PARALLEL JOBS (3 Job ini jalan bersamaan)
+  # GROUP 1: PARALLEL JOBS (3 job ini jalan bersamaan)
   # =================================================================
 
-  # 1. UNIT TEST & SAST
+  # 1) UNIT TEST + COVERAGE + SAST
   test_and_sast:
     runs-on: ubuntu-latest
-    name: Test & SAST
+    name: 🧱 Test & SAST
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
-      - run: npm test
-      
-      - name: Coverage & Sonar
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Unit Tests
+        run: npm test
+
+      - name: Coverage (NYC + Mocha)
         run: |
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run precover
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
-      
-      - name: SonarCloud Scan
+
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: SonarCloud Scan (SAST)
         uses: sonarsource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -56,19 +78,25 @@ jobs:
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
-  # 2. SECURITY AUDIT (Snyk + Trivy Digabung biar hemat waktu boot)
+  # 2) SECURITY AUDIT (Snyk + Trivy digabung)
   security_audit:
     runs-on: ubuntu-latest
-    name: SCA & FS Audit
+    name: 🧩 SCA & FS Audit
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
-      
-      # SNYK SCAN
+
+      - name: Install Dependencies
+        run: npm ci
+
+      # --- Snyk SCA ---
       - name: Snyk Scan
         uses: snyk/actions/node@v1
         continue-on-error: true
@@ -77,125 +105,161 @@ jobs:
         with:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
-      
-      # TRIVY SCAN
-      - uses: aquasecurity/trivy-action@0.22.0
+
+      - name: Enforce Snyk Policy (Fail on High/Critical)
+        run: |
+          HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
+          CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
+          if [ $((HIGH + CRIT)) -gt 0 ]; then
+            echo "⛔ Security Gate Failed: Found High/Critical vulnerabilities."
+            exit 1
+          fi
+          echo "✅ Snyk gate passed."
+
+      # --- Trivy FS ---
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@0.22.0
         with:
           scan-type: fs
           ignore-unfixed: true
           format: table
           output: trivy-report.txt
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Security Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
             snyk-report.json
             trivy-report.txt
 
-  # 3. BUILD CONTAINER
+  # 3) BUILD & PUSH CONTAINER (PODMAN → DOCKERHUB)
   podman_build_push:
     runs-on: ubuntu-latest
-    name: Build Image
+    name: 📦 Build & Push Image
     outputs:
       sha_tag: ${{ steps.meta.outputs.sha_tag }}
       image_repo: ${{ steps.meta.outputs.image_repo }}
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - id: meta
-        name: Metadata
+        name: Prepare Image Metadata
         run: |
-          echo "sha_tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-          echo "image_repo=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> $GITHUB_OUTPUT
+          echo "sha_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "image_repo=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
 
-      - name: Install Podman & Login
+      - name: Install Podman
         run: |
-          sudo apt-get update && sudo apt-get install -y podman
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          sudo apt-get update
+          sudo apt-get install -y podman
 
-      - name: Build & Push
+      - name: DockerHub Login (Podman non-TTY fix)
         run: |
-          podman build -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}" -t "${{ steps.meta.outputs.image_repo }}:latest" .
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+          podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build Image
+        run: |
+          podman build \
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}" \
+            -t "${{ steps.meta.outputs.image_repo }}:latest" .
+
+      - name: Push Images
+        run: |
           podman push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}"
           podman push "${{ steps.meta.outputs.image_repo }}:latest"
 
   # =================================================================
-  # GROUP 2: SIGNING (Menunggu Group 1 Selesai)
+  # GROUP 2: SIGNING (tunggu Group 1 selesai)
   # =================================================================
-  
   cosign_sign:
     needs: [test_and_sast, security_audit, podman_build_push]
     runs-on: ubuntu-latest
-    name: Sign Image
+    name: 🔏 Cosign Signing
+
     steps:
-      - name: Install Cosign
+      - name: Install Cosign (v2.4.1)
         run: |
           wget https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64
           mv cosign-linux-amd64 cosign
           chmod +x cosign
           sudo mv cosign /usr/local/bin/cosign
           cosign version
-      
+
       - name: DockerHub Login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Sign & Export
+      - name: Sign & Export Signature
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
         run: |
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key -y "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
-          cosign download signature "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}" --output-file cosign.sig
+          cosign sign \
+            --key cosign.key \
+            -y \
+            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
+          cosign download signature \
+            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}" \
+            --output-file cosign.sig
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Cosign Signature
+        uses: actions/upload-artifact@v4
         with:
           name: cosign-signature
           path: cosign.sig
 
   # =================================================================
-  # GROUP 3: DAST (Smart Scanning)
+  # GROUP 3: DAST (Smart ZAP: baseline vs full)
   # =================================================================
-
   dast_zap:
     needs: cosign_sign
     runs-on: ubuntu-latest
-    name: Smart ZAP Scan
+    name: 🎯 Smart OWASP ZAP
     continue-on-error: true
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - run: npm ci
-      
+
+      - name: Install Dependencies
+        run: npm ci
+
       - name: Start App
-        run: | 
-          nohup npm start &>/dev/null
+        run: |
+          nohup npm start &>/dev/null &
           disown $!
+          echo "Waiting app on :3000..."
           sleep 10
 
-      # LOGIKA PINTAR: Cek apakah ini Schedule atau Push biasa
-      - name: Determine Scan Type
+      - name: Determine Scan Type (Baseline vs Full)
         id: scan_type
         run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
-            echo "SCRIPT=zap-full-scan.py" >> $GITHUB_OUTPUT
-            echo "Running FULL SCAN (Slow but thorough)"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "SCRIPT=zap-full-scan.py" >> "$GITHUB_OUTPUT"
+            echo "mode=FULL" >> "$GITHUB_OUTPUT"
           else
-            echo "SCRIPT=zap-baseline.py" >> $GITHUB_OUTPUT
-            echo "Running BASELINE SCAN (Fast)"
+            echo "SCRIPT=zap-baseline.py" >> "$GITHUB_OUTPUT"
+            echo "mode=BASELINE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run ZAP (Docker Manual)
+      - name: Run ZAP via Docker
         run: |
           chmod 777 .
-          docker run -v $(pwd):/zap/wrk/:rw \
+          echo "Running ZAP mode: ${{ steps.scan_type.outputs.mode }}"
+          docker run -v "$(pwd)":/zap/wrk/:rw \
             --network="host" \
             -t ghcr.io/zaproxy/zaproxy:stable \
             ${{ steps.scan_type.outputs.SCRIPT }} \
@@ -204,10 +268,13 @@ jobs:
             -J report_json.json \
             -a || true
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload ZAP Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: report_html.html
+          path: |
+            report_html.html
+            report_json.json
 
   # =================================================================
   # SUMMARY
@@ -215,6 +282,16 @@ jobs:
   summary:
     needs: [dast_zap]
     runs-on: ubuntu-latest
-    name: Summary
+    name: 🧾 DevSecOps Summary
+
     steps:
-      - run: echo "Pipeline Completed Successfully!"
+      - name: Final Summary
+        run: |
+          echo "## DevSecOps Pipeline v2 — Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Unit Tests + Coverage + SonarCloud SAST" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Snyk SCA + Trivy FS (artifacts: security-reports)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Podman Build & Push → ${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Cosign Signature exported (cosign.sig)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Smart ZAP (${ { github.event_name } }) → zap-report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pipeline Completed Successfully 🎉"
