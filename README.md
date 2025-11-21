@@ -2,13 +2,13 @@
 
 [![CI/CD Pipeline](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions/workflows/devsecops-pipeline.yaml/badge.svg)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions)
 [![Security: Snyk](https://img.shields.io/badge/Security-Snyk-orange)](https://snyk.io/)
-[![Signed with Cosign](https://img.shields.io/badge/Signed_with-Cosign-purple)](https://sigstore.dev/)
-[![Container: Podman](https://img.shields.io/badge/Container-Podman-892CA0)](https://podman.io/)
+[![Signed with Cosign](https://img.shields.io/badge/Signed_with-Cosign-purple)](https://sigstore.dev)
+[![Container: Podman](https://img.shields.io/badge/Container-Podman-892CA0)](https://podman.io)
 
-> **EN:** A modern reference implementation of a secure Node.js supply chain.  
-> **ID:** Implementasi modern Supply Chain Security untuk aplikasi Node.js dengan pipeline DevSecOps lengkap.
+> **EN:** A modern, secure-by-default Node.js weather application showcasing a complete DevSecOps pipeline.  
+> **ID:** Aplikasi Weather Node.js yang sudah diamankan dengan pipeline DevSecOps end-to-end.
 
-Modernized from Lissy93’s example and transformed into a fully secured, shift-left hardened weather application.
+Modernized from Lissy93’s original project and upgraded into a **Secure Software Supply Chain** reference implementation.
 
 ---
 
@@ -16,29 +16,28 @@ Modernized from Lissy93’s example and transformed into a fully secured, shift-
 
 ### Build & Quality
 - Node.js 20 LTS
-- Unit tests with Mocha, Chai, Sinon
-- 80%+ coverage enforced via NYC
-- Code linting and clean structure
+- Unit testing with Mocha, Chai, Sinon
+- 80%+ coverage via NYC
+- Clean code structure & linting
 
 ### DevSecOps Security Pipeline
-
 1. **SAST — SonarCloud**  
-   EN: Detects bugs, vulnerabilities, code smells  
-   ID: Analisis statis untuk menemukan bug & kerentanan lebih awal
+   EN: Detects bugs & vulnerabilities  
+   ID: Analisis statis mendeteksi bug sejak awal
 
 2. **SCA — Snyk**  
-   Auto-fail jika dependency memiliki severity High/Critical
+   Auto-fail untuk severity High/Critical
 
 3. **Container Security — Podman + Trivy**  
-   - Podman rootless build  
-   - Trivy filesystem + OS package scan
+   - Rootless container build  
+   - Trivy filesystem & OS package scan
 
 4. **Supply Chain Security — Cosign**  
-   - Image ditandatangani secara kriptografis  
-   - Anti-tampering verification
+   - Image signing  
+   - Prevent tampering & ensure provenance
 
 5. **DAST — OWASP ZAP**  
-   - Dynamic penetration test  
+   - Full dynamic scan  
    - HTML/JSON reports  
    - Auto-create GitHub Issues
 
@@ -48,17 +47,39 @@ Modernized from Lissy93’s example and transformed into a fully secured, shift-
 
 ```
 .
-├── .github/workflows/
-├── test/
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   └── security-scan-fail.md
+│   └── workflows/
+│       ├── actionlint.yml
+│       ├── devsecops-pipeline.yaml
+│       ├── secret-scanner.yaml
+│       └── dependabot.yml
+│
 ├── test-data/
+│   ├── sample-data.js
+│   └── sample-weather-raw.json
+│
+├── test/
+│   ├── app.test.js
+│   ├── fetch-weather.test.js
+│   └── prepared-for-the-weather.test.js
+│
+├── .dockerignore
+├── .gitignore
+├── Dockerfile
+├── Dockerfile.dev
+├── podman-compose.yml
+├── SECURITY.md
+├── README.md
 ├── app.js
 ├── fetch-weather.js
-├── prepared-for-the-weather.js
 ├── fix-mocha-exit.js
+├── prepared-for-the-weather.js
+├── nyc.config.json
 ├── package.json
 ├── package-lock.json
-├── nyc.config.json
-└── README.md
+└── xunit.xml
 ```
 
 ---
@@ -80,7 +101,7 @@ podman run -d \
   weather-app
 ```
 
-Access: http://localhost:3000
+Access at: http://localhost:3000
 
 ### Indonesian
 ```
@@ -126,33 +147,32 @@ App running at: http://localhost:3000
 
 | Layer | Tool | Description |
 |-------|------|-------------|
-| SAST | SonarCloud | Static code analysis |
-| SCA | Snyk | Dependency vulnerability scan |
+| SAST | SonarCloud | Static analysis |
+| SCA | Snyk | Dependency scan |
 | SBOM | Syft | Software Bill of Materials |
-| Container Scan | Trivy | OS & FS vuln scan |
-| Signing | Cosign | Image integrity & provenance |
-| DAST | OWASP ZAP | Dynamic penetration testing |
+| Container Scan | Trivy | OS & FS vulnerability scan |
+| Signing | Cosign | Image signature & provenance |
+| DAST | OWASP ZAP | Runtime penetration testing |
 
 ---
 
 ## 🌐 CI/CD Pipeline Flow
 
 ```
-1. Checkout Code
-2. Install Dependencies
+1. Checkout source code
+2. Install dependencies
 3. Unit Tests + Coverage
 4. SonarCloud SAST Scan
 5. Snyk SCA Scan
-6. Podman Rootless Build
+6. Podman rootless image build
 7. Generate SBOM (Syft)
-8. Trivy Scan
-9. Cosign Signing
-10. OWASP ZAP DAST Scan
-11. Upload Reports & Summary
+8. Trivy container scan
+9. Cosign image signing
+10. OWASP ZAP DAST scan
+11. Upload reports + GitHub Summary
 ```
 
 ---
 
 ## License
-
-MIT License.
+MIT License

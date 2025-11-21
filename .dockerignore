@@ -32,7 +32,6 @@ __tests__/
 reports/
 logs/
 security-reports/
-zap-report/
 sbom.json
 *.sbom
 *.sig
