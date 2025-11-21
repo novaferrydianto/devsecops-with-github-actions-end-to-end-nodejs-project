@@ -1,4 +1,4 @@
-name: DevSecOps Pipeline v2
+name: DevSecOps Pipeline
 
 on:
   push:
@@ -69,7 +69,7 @@ jobs:
           path: coverage/
 
       - name: SonarCloud Scan (SAST)
-        uses: sonarsource/sonarcloud-github-action@v2
+        uses: sonarsource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92 # v2.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -98,7 +98,7 @@ jobs:
 
       # --- Snyk SCA ---
       - name: Snyk Scan
-        uses: snyk/actions/node@v1
+        uses: snyk/actions/node@b98d498629f1c368650224d6d212bf7dfa89e4bf # 0.4.0
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

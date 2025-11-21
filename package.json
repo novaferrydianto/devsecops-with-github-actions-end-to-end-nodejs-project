@@ -4,7 +4,9 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
-    "start": "node --require @aikidosec/firewall app.js",
+    "dev": "node app.js",
+    "start": "node app.js",
+    "start:secure": "AIKIDO_BLOCK=true node app.js",
     "test": "mocha --reporter mocha-sonarqube-reporter --reporter-options output=xunit.xml test --exit",
     "cover": "cross-env NODE_OPTIONS=--experimental-vm-modules nyc --reporter=text --reporter=lcov mocha --exit",
     "precover": "rm -rf .nyc_output coverage",
