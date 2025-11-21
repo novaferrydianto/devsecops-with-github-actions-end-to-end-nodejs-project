@@ -22,8 +22,8 @@ permissions:
 
 env:
   NODE_VERSION: 20
-  REGISTRY: docker.io
-  IMAGE_NAME: weather-app
+  REGISTRY: ${{ secrets.REGISTRY }}
+  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
 
 defaults:
   run:
@@ -149,7 +149,7 @@ jobs:
         name: Prepare Image Metadata
         run: |
           echo "sha_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          echo "image_repo=${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+          echo "image_repo=${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
 
       - name: Install Podman
         run: |
@@ -199,7 +199,7 @@ jobs:
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          FULL_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          FULL_IMAGE: ${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}
         run: |
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
           cosign sign \
