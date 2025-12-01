@@ -63,7 +63,7 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: coverage/
@@ -126,7 +126,7 @@ jobs:
           output: trivy-report.txt
 
       - name: Upload Security Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: security-reports
           path: |
@@ -211,7 +211,7 @@ jobs:
             --output-file cosign.sig
 
       - name: Upload Cosign Signature
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: cosign-signature
           path: cosign.sig
@@ -269,7 +269,7 @@ jobs:
             -a || true
 
       - name: Upload ZAP Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: zap-report
           path: |
