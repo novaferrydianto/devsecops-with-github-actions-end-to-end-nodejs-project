@@ -27,7 +27,7 @@
     "source-map-support": "^0.5.21"
   },
   "dependencies": {
-    "@aikidosec/firewall": "^1.8.0",
+    "@aikidosec/firewall": "^1.8.1",
     "colors": "^1.4.0",
     "command-line-args": "^6.0.1",
     "dotenv": "^17.2.3",
