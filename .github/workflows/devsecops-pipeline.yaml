@@ -74,7 +74,7 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: coverage-report
           path: coverage/
@@ -179,7 +179,7 @@ jobs:
 
       - name: Upload Security Artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: security-reports
           path: |
@@ -232,7 +232,7 @@ jobs:
 
       - name: Upload Trivy SARIF as artifact (fallback)
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: trivy-sarif
           path: trivy-results.sarif
@@ -334,7 +334,7 @@ jobs:
             --output-file cosign.sig
 
       - name: Upload Cosign Signature
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: cosign-signature
           path: cosign.sig
@@ -382,7 +382,7 @@ jobs:
             -J report_json.json || true
 
       - name: Upload ZAP Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: zap-report-ci
           path: |
@@ -430,7 +430,7 @@ jobs:
             -a || true
 
       - name: Upload ZAP Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: zap-report-nightly
           path: |
@@ -541,7 +541,7 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: coverage-report
           path: coverage/
@@ -609,7 +609,7 @@ jobs:
           output: trivy-report.txt
 
       - name: Upload Security Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: security-reports
           path: |
@@ -663,7 +663,7 @@ jobs:
 
       - name: Upload Trivy SARIF as artifact (fallback)
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: trivy-sarif
           path: trivy-results.sarif
@@ -768,7 +768,7 @@ jobs:
             --output-file cosign.sig
 
       - name: Upload Cosign Signature
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: cosign-signature
           path: cosign.sig
@@ -816,7 +816,7 @@ jobs:
             -J report_json.json || true
 
       - name: Upload ZAP Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: zap-report-ci
           path: |
@@ -864,7 +864,7 @@ jobs:
             -a || true
 
       - name: Upload ZAP Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: zap-report-nightly
           path: |
