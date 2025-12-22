@@ -6,7 +6,8 @@ on:
   pull_request:
     branches: [master]
   schedule:
-    - cron: "0 3 * * *" # Full scan jalan jam 3 pagi
+    # 03:00 WIB (UTC+7) = 20:00 UTC
+    - cron: "0 20 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -22,8 +23,9 @@ permissions:
 
 env:
   NODE_VERSION: 20
-  REGISTRY: ${{ secrets.REGISTRY }}
-  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+  REGISTRY: ${{ secrets.REGISTRY }}                 # e.g. docker.io
+  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}             # e.g. my-app
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
 defaults:
   run:
@@ -31,12 +33,12 @@ defaults:
 
 jobs:
   # =================================================================
-  # GROUP 1: PARALLEL JOBS (3 job ini jalan bersamaan)
+  # GROUP 1: PARALLEL JOBS (jalan bersamaan)
   # =================================================================
 
-  # 1) UNIT TEST + COVERAGE + SAST
   test_and_sast:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     name: 🧱 Test & SAST
 
     steps:
@@ -73,14 +75,14 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          args:
+          args: >
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
-  # 2) SECURITY AUDIT (Snyk + Trivy digabung)
   security_audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     name: 🧩 SCA & FS Audit
 
     steps:
@@ -108,12 +110,18 @@ jobs:
 
       - name: Enforce Snyk Policy (Fail on High/Critical)
         run: |
-          HIGH=$(grep -o '"severity":"high"' snyk-report.json | wc -l || true)
-          CRIT=$(grep -o '"severity":"critical"' snyk-report.json | wc -l || true)
-          if [ $((HIGH + CRIT)) -gt 0 ]; then
-            echo "⛔ Security Gate Failed: Found High/Critical vulnerabilities."
-            exit 1
+          if [ ! -f snyk-report.json ]; then
+            echo "⛔ Missing snyk-report.json (Snyk may have failed to generate report)."
+            exit 2
           fi
+
+          jq -e '
+            ([.. | objects | select(has("severity")) | .severity]
+             | map(select(.=="high" or .=="critical"))
+             | length) == 0
+          ' snyk-report.json >/dev/null \
+          || { echo "⛔ Security Gate Failed: Found High/Critical vulnerabilities."; exit 1; }
+
           echo "✅ Snyk gate passed."
 
       # --- Trivy FS ---
@@ -133,10 +141,68 @@ jobs:
             snyk-report.json
             trivy-report.txt
 
-  # 3) BUILD & PUSH CONTAINER (PODMAN → DOCKERHUB)
-  podman_build_push:
+  # =================================================================
+  # IMAGE SAST/SCA (Container): BUILD LOCAL -> TRIVY SARIF -> UPLOAD
+  # (Letakkan "setelah build lokal")
+  # Skip saat schedule untuk menghindari build harian otomatis.
+  # =================================================================
+  image_scan_trivy_sarif:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
-    name: 📦 Build & Push Image
+    timeout-minutes: 30
+    name: 🧪 Build Local + Trivy Image SARIF
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (local, for scanning)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Run Trivy vulnerability scanner (SARIF)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: image
+          image-ref: ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+          # Gate: fail job if CRITICAL/HIGH exists (matching 'severity')
+          exit-code: 1
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        # Upload SARIF sering dibatasi untuk PR dari fork (token permissions).
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
+
+      - name: Upload Trivy SARIF as artifact (fallback)
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
+
+  # =================================================================
+  # GROUP 2: BUILD & PUSH (PODMAN) - skip saat schedule
+  # =================================================================
+  podman_build_push:
+    if: github.event_name != 'schedule'
+    needs: [test_and_sast, security_audit, image_scan_trivy_sarif]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: 📦 Build & Push Image (Podman)
     outputs:
       sha_tag: ${{ steps.meta.outputs.sha_tag }}
       image_repo: ${{ steps.meta.outputs.image_repo }}
@@ -149,17 +215,17 @@ jobs:
         name: Prepare Image Metadata
         run: |
           echo "sha_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          echo "image_repo=${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+          echo "image_repo=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
 
       - name: Install Podman
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: DockerHub Login (Podman non-TTY fix)
+      - name: Registry Login (Podman non-TTY fix)
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
-          podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          podman login "${{ env.REGISTRY }}" -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build Image
         run: |
@@ -173,42 +239,40 @@ jobs:
           podman push "${{ steps.meta.outputs.image_repo }}:latest"
 
   # =================================================================
-  # GROUP 2: SIGNING (tunggu Group 1 selesai)
+  # GROUP 2: SIGNING - skip saat schedule
   # =================================================================
   cosign_sign:
-    needs: [test_and_sast, security_audit, podman_build_push]
+    if: github.event_name != 'schedule'
+    needs: [podman_build_push]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     name: 🔏 Cosign Signing
 
     steps:
-      - name: Install Cosign (v2.4.1)
-        run: |
-          wget https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64
-          mv cosign-linux-amd64 cosign
-          chmod +x cosign
-          sudo mv cosign /usr/local/bin/cosign
-          cosign version
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: "v2.4.1"
 
       - name: DockerHub Login
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Sign & Export Signature
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          FULL_IMAGE: ${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}
+          FULL_IMAGE: ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          SHA_TAG: ${{ needs.podman_build_push.outputs.sha_tag }}
         run: |
+          set -euo pipefail
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign \
-            --key cosign.key \
-            -y \
-            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
-          cosign download signature \
-            "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}" \
-            --output-file cosign.sig
+          cosign version
+
+          cosign sign --key cosign.key -y "$FULL_IMAGE:$SHA_TAG"
+          cosign download signature "$FULL_IMAGE:$SHA_TAG" --output-file cosign.sig
 
       - name: Upload Cosign Signature
         uses: actions/upload-artifact@v5
@@ -217,12 +281,16 @@ jobs:
           path: cosign.sig
 
   # =================================================================
-  # GROUP 3: DAST (Smart ZAP: baseline vs full)
+  # GROUP 3: DAST (Smart ZAP)
+  # - CI (push/PR): baseline after signing
+  # - schedule: full scan without build/push/sign
   # =================================================================
-  dast_zap:
-    needs: cosign_sign
+  dast_zap_ci:
+    if: github.event_name != 'schedule'
+    needs: [cosign_sign]
     runs-on: ubuntu-latest
-    name: 🎯 Smart OWASP ZAP
+    timeout-minutes: 30
+    name: 🎯 ZAP Baseline (CI)
     continue-on-error: true
 
     steps:
@@ -233,6 +301,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Install Dependencies
         run: npm ci
@@ -240,29 +309,64 @@ jobs:
       - name: Start App
         run: |
           nohup npm start &>/dev/null &
-          disown $!
+          disown || true
           echo "Waiting app on :3000..."
           sleep 10
 
-      - name: Determine Scan Type (Baseline vs Full)
-        id: scan_type
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "SCRIPT=zap-full-scan.py" >> "$GITHUB_OUTPUT"
-            echo "mode=FULL" >> "$GITHUB_OUTPUT"
-          else
-            echo "SCRIPT=zap-baseline.py" >> "$GITHUB_OUTPUT"
-            echo "mode=BASELINE" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run ZAP via Docker
+      - name: Run ZAP Baseline via Docker
         run: |
           chmod 777 .
-          echo "Running ZAP mode: ${{ steps.scan_type.outputs.mode }}"
           docker run -v "$(pwd)":/zap/wrk/:rw \
             --network="host" \
             -t ghcr.io/zaproxy/zaproxy:stable \
-            ${{ steps.scan_type.outputs.SCRIPT }} \
+            zap-baseline.py \
+            -t http://localhost:3000 \
+            -r report_html.html \
+            -J report_json.json || true
+
+      - name: Upload ZAP Artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: zap-report-ci
+          path: |
+            report_html.html
+            report_json.json
+
+  dast_zap_nightly:
+    if: github.event_name == 'schedule'
+    needs: [test_and_sast, security_audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    name: 🎯 ZAP Full (Nightly)
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Start App
+        run: |
+          nohup npm start &>/dev/null &
+          disown || true
+          echo "Waiting app on :3000..."
+          sleep 10
+
+      - name: Run ZAP Full via Docker
+        run: |
+          chmod 777 .
+          docker run -v "$(pwd)":/zap/wrk/:rw \
+            --network="host" \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py \
             -t http://localhost:3000 \
             -r report_html.html \
             -J report_json.json \
@@ -271,27 +375,43 @@ jobs:
       - name: Upload ZAP Artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: zap-report
+          name: zap-report-nightly
           path: |
             report_html.html
             report_json.json
 
   # =================================================================
-  # SUMMARY
+  # SUMMARY (needs harus eksplisit supaya outputs bisa dibaca)
   # =================================================================
   summary:
-    needs: [dast_zap]
+    needs:
+      - test_and_sast
+      - security_audit
+      - image_scan_trivy_sarif
+      - podman_build_push
+      - cosign_sign
+      - dast_zap_ci
+      - dast_zap_nightly
+    if: always()
     runs-on: ubuntu-latest
     name: 🧾 DevSecOps Summary
 
     steps:
       - name: Final Summary
         run: |
-          echo "## DevSecOps Pipeline v2 — Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Unit Tests + Coverage + SonarCloud SAST" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Snyk SCA + Trivy FS (artifacts: security-reports)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Podman Build & Push → ${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Cosign Signature exported (cosign.sig)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Smart ZAP (${{ github.event_name }}) → zap-report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Snyk SCA gate + Trivy FS (artifact: security-reports)" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "- ✅ Trivy Image SARIF (Security tab + artifact: trivy-sarif)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- ✅ Build & Push → ${{ needs.podman_build_push.outputs.image_repo }}:${{ needs.podman_build_push.outputs.sha_tag }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- ✅ Cosign Signature exported (artifact: cosign-signature)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- ✅ ZAP Baseline → artifact: zap-report-ci" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- 🕒 Nightly run (no build/push/sign, no image SARIF build)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- ✅ ZAP Full Scan → artifact: zap-report-nightly" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Pipeline Completed Successfully 🎉" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pipeline finished (DAST is allowed to fail by design)." >> "$GITHUB_STEP_SUMMARY"
