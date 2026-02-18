@@ -170,7 +170,7 @@ jobs:
 
       # --- Trivy FS ---
       - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -211,7 +211,7 @@ jobs:
 
       # 1) Generate SARIF without failing (so upload is reliable)
       - name: Trivy Image Scan (SARIF) - generate report
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         continue-on-error: true
         with:
           scan-type: image
@@ -239,7 +239,7 @@ jobs:
 
       # 2) Gate (fail) after upload so Security tab still gets populated
       - name: Trivy Gate (Fail on CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
@@ -601,7 +601,7 @@ jobs:
 
       # --- Trivy FS ---
       - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -642,7 +642,7 @@ jobs:
 
       # 1) Generate SARIF without failing (so upload is reliable)
       - name: Trivy Image Scan (SARIF) - generate report
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         continue-on-error: true
         with:
           scan-type: image
@@ -670,7 +670,7 @@ jobs:
 
       # 2) Gate (fail) after upload so Security tab still gets populated
       - name: Trivy Gate (Fail on CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
