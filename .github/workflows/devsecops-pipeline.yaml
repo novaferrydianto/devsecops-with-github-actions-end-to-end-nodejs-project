@@ -211,7 +211,7 @@ jobs:
 
       # 1) Generate SARIF without failing (so upload is reliable)
       - name: Trivy Image Scan (SARIF) - generate report
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@18f259c5e228eed2d76e1d817b115657059819df # v0.35.0
         continue-on-error: true
         with:
           scan-type: image
