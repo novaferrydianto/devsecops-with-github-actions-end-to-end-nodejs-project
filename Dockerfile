@@ -1,7 +1,7 @@
 ######################
 # BUILD
 ######################
-FROM node:20-alpine AS builder
+FROM node:25-alpine@sha256:5209bcaca9836eb3448b650396213dbe9d9a34d31840c2ae1f206cb2986a8543 AS builder
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
