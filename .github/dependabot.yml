@@ -15,7 +15,6 @@ updates:
       prefix: "ci"
       include: "scope"
 
-  # 2. NPM (Shopify-Odo-Price App)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
