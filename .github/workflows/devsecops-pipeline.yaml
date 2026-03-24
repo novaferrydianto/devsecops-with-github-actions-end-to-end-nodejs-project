@@ -52,12 +52,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@3922559bd1f7446220f4183615553f126bb6b53e
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -170,7 +170,7 @@ jobs:
 
       # --- Trivy FS ---
       - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@18f259c5e228eed2d76e1d817b115657059819df
         with:
           scan-type: fs
           ignore-unfixed: true
