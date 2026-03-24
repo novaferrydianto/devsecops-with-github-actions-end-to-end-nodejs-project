@@ -1,16 +1,15 @@
 version: 2
 updates:
-  # 1. GitHub Actions (Hardened with SHA support)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    rebase-strategy: "auto" # Otomatis rebase jika ada konflik
     labels:
       - "dependencies"
       - "security"
       - "devops"
-    # Dependabot akan menjaga komentar # v4 tetap akurat saat SHA diperbarui
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -20,17 +19,17 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    rebase-strategy: "auto"
     groups:
       nodejs-dependencies:
         patterns:
-          - "*" # Mengelompokkan semua update NPM dalam satu PR mingguan
+          - "*"
     labels:
       - "dependencies"
       - "javascript"
 
-  # 3. Docker (Crucial for GKE Base Images)
   - package-ecosystem: "docker"
-    directory: "/" # Lokasi Dockerfile Anda
+    directory: "/"
     schedule:
       interval: "weekly"
     labels:
