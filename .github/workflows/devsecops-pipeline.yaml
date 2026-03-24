@@ -197,7 +197,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.2.2 (Node 24 Support)
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -211,7 +211,7 @@ jobs:
 
       # 1) Generate SARIF without failing (so upload is reliable)
       - name: Trivy Image Scan (SARIF) - generate report
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # CLEAN SHA
         continue-on-error: true
         with:
           scan-type: image
@@ -239,7 +239,7 @@ jobs:
 
       # 2) Gate (fail) after upload so Security tab still gets populated
       - name: Trivy Gate (Fail on CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # CLEAN SHA (Dulu 0.33.1)
         with:
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
