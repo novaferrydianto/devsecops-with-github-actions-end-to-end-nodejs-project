@@ -1,21 +1,39 @@
 version: 2
 updates:
+  # 1. GitHub Actions (Hardened with SHA support)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
-      - dependencies
-      - security
-    rebase-strategy: "auto"
+      - "dependencies"
+      - "security"
+      - "devops"
+    # Dependabot akan menjaga komentar # v4 tetap akurat saat SHA diperbarui
+    commit-message:
+      prefix: "ci"
+      include: "scope"
 
+  # 2. NPM (Shopify-Odo-Price App)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      nodejs-dependencies:
+        patterns:
+          - "*" # Mengelompokkan semua update NPM dalam satu PR mingguan
     labels:
-      - dependencies
-      - security
-    rebase-strategy: "auto"
+      - "dependencies"
+      - "javascript"
+
+  # 3. Docker (Crucial for GKE Base Images)
+  - package-ecosystem: "docker"
+    directory: "/" # Lokasi Dockerfile Anda
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "docker"
