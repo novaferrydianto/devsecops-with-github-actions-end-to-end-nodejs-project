@@ -1,15 +1,11 @@
 name: DevSecOps Pipeline
 
 on:
-  push:name: DevSecOps Pipeline
-
-on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
   schedule:
-    # 03:00 WIB (UTC+7) = 20:00 UTC
     - cron: "0 20 * * *"
   workflow_dispatch:
 
@@ -52,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -98,7 +94,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -264,7 +260,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - id: meta
         name: Prepare Image Metadata
@@ -352,7 +348,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -399,7 +395,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -472,28 +468,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Pipeline finished (DAST allowed to fail by design)." >> "$GITHUB_STEP_SUMMARY"
 
-    branches: [master]
-  pull_request:
-    branches: [master]
-  schedule:
-    # 03:00 WIB (UTC+7) = 20:00 UTC
-    - cron: "0 20 * * *"
-  workflow_dispatch:
-
-concurrency:
-  group: devsecops-${{ github.ref }}
-  cancel-in-progress: false
-
-permissions:
-  contents: read
-  security-events: write
-  actions: read
-  issues: write
-  packages: write
-
-env:
-  NODE_VERSION: 20
-
   # Secrets-based naming for push/sign (can be empty in some PR contexts)
   REGISTRY: ${{ secrets.REGISTRY }}         # e.g. docker.io
   IMAGE_NAME: ${{ secrets.IMAGE_NAME }}     # e.g. my-app
@@ -519,7 +493,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -563,7 +537,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -628,7 +602,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -695,7 +669,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - id: meta
         name: Prepare Image Metadata
@@ -786,7 +760,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -827,13 +801,13 @@ jobs:
     if: github.event_name == 'schedule'
     needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
-    name: 🎯 ZAP Full (Nightly)
+    name: ZAP Full (Nightly)
     timeout-minutes: 60
     continue-on-error: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node
         uses: actions/setup-node@v6
