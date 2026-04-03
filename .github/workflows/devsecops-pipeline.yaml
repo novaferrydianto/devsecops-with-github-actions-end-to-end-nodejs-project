@@ -68,6 +68,7 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: SonarCloud Scan
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
         uses: SonarSource/sonarcloud-github-action@v3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -180,24 +181,19 @@ jobs:
     needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
-    outputs:
-      sha_tag: ${{ steps.meta.outputs.sha_tag }}
-      image_repo: ${{ steps.meta.outputs.image_repo }}
     steps:
       - uses: actions/checkout@v4
-      - id: meta
-        run: |
-          echo "sha_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          echo "image_repo=${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
       - name: Install Podman
         run: sudo apt-get update && sudo apt-get install -y podman
       - name: Registry Login
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
       - name: Build & Push
         run: |
-          podman build -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}" -t "${{ steps.meta.outputs.image_repo }}:latest" .
-          podman push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.sha_tag }}"
-          podman push "${{ steps.meta.outputs.image_repo }}:latest"
+          IMAGE_FULL_PATH="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
+          TAG="${GITHUB_SHA::7}"
+          podman build -t "$IMAGE_FULL_PATH:$TAG" -t "$IMAGE_FULL_PATH:latest" .
+          podman push "$IMAGE_FULL_PATH:$TAG"
+          podman push "$IMAGE_FULL_PATH:latest"
 
   cosign_sign:
     if: github.event_name != 'schedule'
@@ -215,10 +211,13 @@ jobs:
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          FULL_IMAGE: ${{ needs.podman_build_push.outputs.image_repo }}
-          TAG: ${{ needs.podman_build_push.outputs.sha_tag }}
         run: |
           set -euo pipefail
+          
+          # Re-construct variables for precision
+          FULL_IMAGE="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
+          TAG="${GITHUB_SHA::7}"
+          
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
           
           # 1. Sign image
@@ -234,7 +233,7 @@ jobs:
           cat cosign.pub >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "#### Signature Status:" >> "$GITHUB_STEP_SUMMARY"
+          echo "#### Signature Status for $FULL_IMAGE:$TAG:" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cosign verify --key cosign.pub "$FULL_IMAGE:$TAG" >> "$GITHUB_STEP_SUMMARY" 2>&1
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -250,7 +249,8 @@ jobs:
     name: 🎯 ZAP Baseline (CI)
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Run App & Scan
         run: |
           npm ci && npm start & 
@@ -277,5 +277,5 @@ jobs:
           echo "- ✅ Node Version: ${{ env.NODE_VERSION }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Java 21 compliant for SonarCloud" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Snyk HTML Report Generated" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Cosign Public Key Published to Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Cosign Public Key & Verification Active" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Status: Pipeline Finished" >> "$GITHUB_STEP_SUMMARY"
