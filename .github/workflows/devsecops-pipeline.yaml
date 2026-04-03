@@ -68,7 +68,6 @@ jobs:
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: SonarCloud Scan
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
         uses: SonarSource/sonarcloud-github-action@v3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -101,12 +100,23 @@ jobs:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
 
+      - name: Generate Snyk HTML Report
+        if: always()
+        run: |
+          npm install -g snyk-to-html
+          snyk-to-html -i snyk-report.json -o snyk-report.html
+
       - name: Enforce Snyk Policy (Gate on Master)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           set -euo pipefail
           if [ ! -f snyk-report.json ]; then exit 2; fi
-          jq -e '([.. | objects | select(has("severity")) | .severity] | map(select(.=="high" or .=="critical")) | length) == 0' snyk-report.json >/dev/null || { echo "⛔ Snyk gate failed!"; exit 1; }
+          VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
+          echo "Total High/Critical Vulns: $VULN_COUNT"
+          if [ "$VULN_COUNT" -ne "0" ]; then 
+            echo "⛔ Snyk gate failed: Found $VULN_COUNT issues."; exit 1; 
+          fi
+          echo "✅ Snyk gate passed."
 
       - name: Trivy FS Scan (Master Branch)
         uses: aquasecurity/trivy-action@master
@@ -122,6 +132,7 @@ jobs:
           name: security-reports
           path: |
             snyk-report.json
+            snyk-report.html
             trivy-report.txt
 
   # =================================================================
@@ -130,6 +141,7 @@ jobs:
 
   image_build_local_trivy_sarif:
     if: github.event_name != 'schedule'
+    needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
     name: 🧪 Build & Image Scan
     steps:
@@ -165,7 +177,7 @@ jobs:
 
   podman_build_push:
     if: github.event_name != 'schedule'
-    needs: [test_and_sast, security_audit, image_build_local_trivy_sarif]
+    needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
     outputs:
@@ -191,21 +203,41 @@ jobs:
     if: github.event_name != 'schedule'
     needs: [podman_build_push]
     runs-on: ubuntu-latest
-    name: 🔏 Cosign Signing
+    name: 🔏 Cosign Signing & Verification
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Sign Image
+      
+      - name: Sign Image & Verify
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           FULL_IMAGE: ${{ needs.podman_build_push.outputs.image_repo }}
+          TAG: ${{ needs.podman_build_push.outputs.sha_tag }}
         run: |
+          set -euo pipefail
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key -y "$FULL_IMAGE:${{ needs.podman_build_push.outputs.sha_tag }}"
+          
+          # 1. Sign image
+          cosign sign --key cosign.key -y "$FULL_IMAGE:$TAG"
+          
+          # 2. Derive Public Key for display
+          cosign public-key --key cosign.key --outfile cosign.pub
+          
+          # 3. Publish to Step Summary
+          echo "### 🔑 Cosign Verification Details" >> "$GITHUB_STEP_SUMMARY"
+          echo "#### Public Key (use this to verify image):" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat cosign.pub >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "#### Signature Status:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cosign verify --key cosign.pub "$FULL_IMAGE:$TAG" >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
   # STAGE 4: RUNTIME SECURITY (DAST)
@@ -243,6 +275,7 @@ jobs:
         run: |
           echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Node Version: ${{ env.NODE_VERSION }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Java 21 for SonarCloud Analysis" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Trivy Master Branch Active" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Java 21 compliant for SonarCloud" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Snyk HTML Report Generated" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Cosign Public Key Published to Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Status: Pipeline Finished" >> "$GITHUB_STEP_SUMMARY"
