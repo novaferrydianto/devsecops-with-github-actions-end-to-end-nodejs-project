@@ -8,13 +8,15 @@ on:
   schedule:
     - cron: '22 3 * * 4'
 
-# ✅ SRE Best Practice: Hemat kuota runner dengan membatalkan scan lama di PR yang sama
 concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
-# ✅ PoLP: Global lockdown
 permissions: read-all
+
+# ✅ REMEDIATION 1: Force Node 24 across all jobs in this workflow
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   analyze:
@@ -22,7 +24,6 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      # WAJIB: Untuk mengunggah hasil scan ke dashboard GitHub Security
       security-events: write
       packages: read
       actions: read
@@ -38,21 +39,20 @@ jobs:
           build-mode: none
 
     steps:
-    # 🔄 DEPENDABOT HANDOFF: Menggunakan Tag stabil v4
+    # ✅ REMEDIATION 2: Upgraded to v5 (Native Node 24 support)
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
-    # 🔄 DEPENDABOT HANDOFF: Menggunakan Tag stabil v3
+    # ✅ REMEDIATION 3: Upgraded to CodeQL Action v4
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
-        
-        # ✅ HARDENED: Mengaktifkan kueri ekstra untuk deteksi kerentanan mendalam & kualitas kode
         queries: security-extended,security-and-quality
 
+    # ✅ REMEDIATION 3: Upgraded to CodeQL Action v4
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
       with:
         category: "/language:${{matrix.language}}"
