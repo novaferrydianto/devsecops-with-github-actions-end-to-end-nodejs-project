@@ -1,25 +1,30 @@
 version: 2
 updates:
+  # 1. GitHub Actions: Hardened SHA Updates
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     open-pull-requests-limit: 10
-    rebase-strategy: "auto" # Otomatis rebase jika ada konflik
+    # ✅ Strategi untuk mengupdate SHA tanpa merusak komentar versi
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: "ci"
+      include: "scope"
     labels:
       - "dependencies"
       - "security"
       - "devops"
-    commit-message:
-      prefix: "ci"
-      include: "scope"
 
+  # 2. NPM: Grouped for Efficiency
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     open-pull-requests-limit: 5
-    rebase-strategy: "auto"
+    # ✅ Menggabungkan banyak update kecil jadi satu PR (anti-noise)
     groups:
       nodejs-dependencies:
         patterns:
@@ -28,10 +33,12 @@ updates:
       - "dependencies"
       - "javascript"
 
+  # 3. Docker: Base Image Hardening
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     labels:
       - "dependencies"
       - "docker"
