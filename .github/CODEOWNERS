@@ -1,0 +1,35 @@
+# ==============================================================================
+# DEVSECOPS - CODEOWNERS (2026 STANDARD)
+# ==============================================================================
+
+# 1. Global Ownership
+# Secara default, semua file di repo ini dimiliki oleh Nova
+* @novaferrydianto
+
+# 2. CI/CD Pipeline (Extremely Sensitive)
+# Perubahan pada alur kerja GitHub Actions wajib di-review ketat
+/.github/workflows/    @novaferrydianto
+
+# 3. Container & Infrastructure
+# Dockerfile dan script build adalah target utama supply chain attack
+/Dockerfile            @novaferrydianto
+/Dockerfile.dev        @novaferrydianto
+/podman-compose.yml    @novaferrydianto
+/scripts/              @novaferrydianto
+
+# 4. Dependency Management
+# Mencegah penambahan paket berbahaya tanpa audit manual
+/package.json          @novaferrydianto
+/package-lock.json     @novaferrydianto
+
+# 5. Core Application Logic
+# Logika bisnis utama proyek
+/app.js                @novaferrydianto
+/fetch-weather.js      @novaferrydianto
+/prepared-for-the-weather.js @novaferrydianto
+
+# 6. Security & Quality Gates
+# Konfigurasi scan dan audit
+/SECURITY.md           @novaferrydianto
+/sonar-project.properties @novaferrydianto
+/nyc.config.json       @novaferrydianto
