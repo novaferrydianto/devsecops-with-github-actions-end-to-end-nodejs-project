@@ -2,7 +2,6 @@ name: 🛡️ Security Self-Healing
 
 on:
   workflow_run:
-    # Nama workflow utama Bapak (sesuaikan dengan nama di devsecops-pipeline.yml)
     workflows: ["DevSecOps Pipeline"]
     types: [completed]
     branches: [master]
@@ -20,20 +19,26 @@ jobs:
       - name: 🔍 Find and Close Resolved Security Issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ✅ FIXED 1: Mendeklarasikan target repositori secara eksplisit
+          REPO: ${{ github.repository }}
         run: |
           echo "Pipeline sukses! Memulai pembersihan tiket keamanan..."
           
-          # 1. Ambil daftar issue yang memiliki label 'security' dan 'needs-triage'
-          ISSUES=$(gh issue list --label "security" --label "high-risk" --json number --jq '.[].number')
+          # ✅ FIXED 2: Menyuntikkan -R $REPO untuk bypass pencarian .git lokal
+          ISSUES=$(gh issue list -R $REPO --label "security" --label "high-risk" --json number --jq '.[].number')
           
           if [ -z "$ISSUES" ]; then
             echo "✅ Tidak ada tiket keamanan yang terbuka. Bagus!"
             exit 0
           fi
           
-          # 2. Iterasi dan tutup tiket
+          # Iterasi dan tutup tiket
           for ISSUE_NUMBER in $ISSUES; do
             echo "Closing issue #$ISSUE_NUMBER..."
-            gh issue comment $ISSUE_NUMBER --body "✅ **Self-Healing Triggered**: Build #${{ github.event.workflow_run.run_number }} sukses. Sistem mendeteksi bahwa kerentanan ini telah diperbaiki atau dimitigasi. Menutup tiket secara otomatis."
-            gh issue close $ISSUE_NUMBER --reason "completed"
+            
+            # ✅ FIXED 3: Menyuntikkan -R $REPO pada saat memberi komentar
+            gh issue comment $ISSUE_NUMBER -R $REPO --body "✅ **Self-Healing Triggered**: Build #${{ github.event.workflow_run.run_number }} sukses. Sistem mendeteksi bahwa kerentanan ini telah diperbaiki atau dimitigasi. Menutup tiket secara otomatis."
+            
+            # ✅ FIXED 4: Menyuntikkan -R $REPO pada saat menutup tiket
+            gh issue close $ISSUE_NUMBER -R $REPO --reason "completed"
           done
