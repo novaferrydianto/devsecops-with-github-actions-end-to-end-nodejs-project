@@ -11,7 +11,7 @@ concurrency:
   group: devsecops-${{ github.ref }}
   cancel-in-progress: false
 
-# ✅ STEP 1: Global Lockdown - Default all jobs to Read-Only
+# ✅ STEP 1: Global Lockdown - Principle of Least Privilege
 permissions:
   contents: read
 
@@ -30,9 +30,8 @@ defaults:
 
 jobs:
   # =================================================================
-  # STAGE 1: PARALLEL VALIDATION (SAST & SCA)
+  # STAGE 1: SAST & SCA
   # =================================================================
-
   test_and_sast:
     runs-on: ubuntu-latest
     name: 🧱 Test & SAST
@@ -113,12 +112,10 @@ jobs:
   # =================================================================
   # STAGE 2: CONTAINER SECURITY
   # =================================================================
-
   image_build_local_trivy_sarif:
     needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
     name: 🧪 Build & Image Scan
-    # ✅ STEP 2: Elevate permissions ONLY for SARIF upload
     permissions:
       contents: read
       security-events: write 
@@ -148,9 +145,8 @@ jobs:
           category: trivy-image
 
   # =================================================================
-  # STAGE 3: ARTIFACT DELIVERY & SIGNING
+  # STAGE 3: DELIVERY & SIGNING
   # =================================================================
-
   podman_build_push:
     needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
@@ -172,7 +168,7 @@ jobs:
   cosign_sign:
     needs: [podman_build_push]
     runs-on: ubuntu-latest
-    name: 🔏 Cosign Signing & Verification
+    name: 🔏 Cosign Sign & Verify
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: docker/login-action@v3
@@ -195,9 +191,8 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
-  # STAGE 4: RUNTIME SECURITY (DAST)
+  # STAGE 4: DAST
   # =================================================================
-
   dast_zap_ci:
     needs: cosign_sign
     runs-on: ubuntu-latest
@@ -221,7 +216,6 @@ jobs:
   # =================================================================
   # FINAL SUMMARY
   # =================================================================
-
   summary:
     needs: [test_and_sast, security_audit, podman_build_push, cosign_sign, dast_zap_ci]
     if: always()
@@ -232,6 +226,6 @@ jobs:
         run: |
           echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Runtime: Node 24 (Hardened)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Security: PoLP (Job-level Permissions) Active" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Compliance: License Whitelist & Cosign Verified" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Security: PoLP Job-level Permissions" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Compliance: ISC License & Cosign Provenance" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Status: Production Ready" >> "$GITHUB_STEP_SUMMARY"
