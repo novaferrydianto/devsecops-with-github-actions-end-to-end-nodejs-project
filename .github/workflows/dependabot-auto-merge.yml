@@ -1,0 +1,37 @@
+name: 🤖 Dependabot Auto-Merge (Patch Only)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# ✅ PoLP: Berikan izin tulis HANYA untuk Pull Requests agar bot bisa klik 'Approve' dan 'Merge'
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  dependabot-auto-merge:
+    runs-on: ubuntu-latest
+    name: 🚦 Smart Auto-Merge
+    # HANYA eksekusi jika pembuat PR adalah bot resmi Dependabot
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot Metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Auto-Approve & Enable Auto-Merge for Patches
+        # Logika Inti: Hanya eksekusi jika ini adalah PATCH update (misal 1.2.3 -> 1.2.4)
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        run: |
+          echo "✅ Patch update detected. Approving PR..."
+          gh pr review --approve "$PR_URL"
+          
+          echo "🔄 Enabling auto-merge (squash strategy)..."
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          # GITHUB_TOKEN bawaan cukup untuk operasi ini
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
