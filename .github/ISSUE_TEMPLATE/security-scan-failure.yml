@@ -1,0 +1,87 @@
+name: "🚨 Security Scan Failure"
+description: "Report a failure from automated security scans (Snyk, Trivy, ZAP, TruffleHog)"
+title: "🚨 [SEC-ALERT]: <Brief Description>"
+labels: ["security", "high-risk", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🛡️ Security Incident Triage Form
+        Harap isi formulir ini dengan detail agar tim DevSecOps dapat segera mengisolasi dan memitigasi risiko.
+
+  - type: dropdown
+    id: scanner-type
+    attributes:
+      label: 🧠 What failed? (Scanner Source)
+      description: Pilih sistem yang mendeteksi kerentanan ini.
+      multiple: true
+      options:
+        - "Snyk (Dependencies / SCA)"
+        - "Trivy (FS / IaC / Image)"
+        - "OWASP ZAP (DAST)"
+        - "TruffleHog (Secret Leak)"
+        - "CodeQL (SAST)"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: 📎 Attached Artifacts & Logs
+      description: |
+        Wajib sertakan tautan ke Run CI/CD atau salin log error mentah di sini. Jika ada artifact file (e.g., snyk-report.json), sebutkan lokasinya.
+      placeholder: |
+        - CI/CD Run URL: https://github.com/.../actions/runs/...
+        - Failing Module: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-assessment
+    attributes:
+      label: 🧩 Impact Assessment (SOC-lite)
+      description: Jelaskan radius ledakan (blast radius) dari temuan ini.
+      value: |
+        - **Affected service/module:** - **Attack surface:** (API / package / infra / container)
+        - **Potential risk if not fixed:** - **Prod impact:** (Yes / No - explain)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sla-target
+    attributes:
+      label: ⏱️ Target Remediation SLA
+      description: Pilih SLA berdasarkan keparahan (severity) temuan.
+      options:
+        - "Critical (Fix within 24 Hours)"
+        - "High (Fix within 7 Days)"
+        - "Medium (Fix within 30 Days)"
+        - "Low (Backlog)"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: triage-steps
+    attributes:
+      label: 🧭 Next Steps (Triage Process)
+      description: Checklist wajib untuk tim yang menangani tiket ini.
+      options:
+        - label: Review vulnerability details
+          required: false
+        - label: Validate exploitability (False Positive check)
+          required: false
+        - label: Patch / upgrade affected dependency or code
+          required: false
+        - label: Verify no hardcoded secrets remain (if applicable)
+          required: false
+        - label: Re-run CI/CD security scans successfully
+          required: false
+
+  - type: textarea
+    id: additional-notes
+    attributes:
+      label: 📝 Additional Notes
+      description: Tambahkan konteks tambahan dari pipeline atau developer.
+      required: false
