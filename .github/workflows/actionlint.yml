@@ -1,6 +1,4 @@
-name: Lint Workflows (actionlint)
-permissions:
-  contents: read
+name: 🚀 Lint Workflows (actionlint)
 
 on:
   pull_request:
@@ -8,9 +6,27 @@ on:
       - '.github/workflows/**.yml'
       - '.github/workflows/**.yaml'
 
+# ✅ SRE Best Practice: Hemat antrean runner dengan membatalkan proses lama
+concurrency:
+  group: actionlint-${{ github.ref }}
+  cancel-in-progress: true
+
+# ✅ PoLP: Hanya butuh akses baca untuk melakukan linting
+permissions:
+  contents: read
+
 jobs:
   actionlint:
     runs-on: ubuntu-latest
+    name: 🧩 Check YAML Quality
     steps:
-      - uses: actions/checkout@v6
-      - uses: rhysd/actionlint@v1
+      # ✅ Hardened: SHA Pinning untuk checkout
+      - name: Checkout Code
+        uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f # v4.1.1
+        
+      # ✅ Hardened & FIXED: SHA Pinning untuk versi 1.7.7
+      # Mengatasi error "unable to find version v1" secara permanen
+      - name: Run Actionlint
+        uses: rhysd/actionlint@5fb25d204d80582d96639d6e4b48ed0ff3c8a9ed # v1.7.7
+        with:
+          shellcheck: true
