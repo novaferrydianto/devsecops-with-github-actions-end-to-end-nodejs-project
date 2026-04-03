@@ -20,7 +20,7 @@ permissions:
 
 env:
   NODE_VERSION: 24
-  # ✅ FIX: Explicitly opt-in to Node 24 for all actions to remove deprecation warnings
+  # ✅ Force Node 24 for all actions to eliminate deprecation warnings
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ${{ secrets.REGISTRY }}
   IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
@@ -34,7 +34,7 @@ defaults:
 
 jobs:
   # =================================================================
-  # STAGE 1: PARALLEL VALIDATION
+  # STAGE 1: PARALLEL VALIDATION (SAST & SCA)
   # =================================================================
 
   test_and_sast:
@@ -42,7 +42,7 @@ jobs:
     name: 🧱 Test & SAST
     steps:
       - name: Checkout
-        uses: actions/checkout@v5 # Ensure v5 or later
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -52,7 +52,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Setup Java 21
+      - name: Setup Java 21 (SonarCloud Support)
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
@@ -87,14 +87,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Snyk Scan (Security & License)
+      - name: Snyk Scan
         uses: snyk/actions/node@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: test
-          # --severity-threshold=low agar semua data (termasuk lisensi) masuk ke JSON
           args: --severity-threshold=low --json-file-output=snyk-report.json
 
       - name: Generate Snyk HTML Report
@@ -103,7 +102,7 @@ jobs:
           npm install -g snyk-to-html
           snyk-to-html -i snyk-report.json -o snyk-report.html
 
-      - name: Enforce Security & License Policy
+      - name: Enforce Security & Whitelist License Policy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           set -euo pipefail
@@ -112,24 +111,24 @@ jobs:
           # 1. SECURITY CHECK (High/Critical)
           VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
           
-          # 2. LICENSE CHECK (GPL, AGPL, LGPL)
-          # Snyk menandai masalah lisensi dengan tipe 'license' di JSON
-          LICENSE_VIOLATIONS=$(jq '[.vulnerabilities[]? | select(.type=="license" or (.title | contains("GPL") or contains("AGPL")))] | length' snyk-report.json)
+          # 2. LICENSE WHITELIST CHECK
+          ALLOWED_REGEX="MIT|Apache-2.0|BSD-2-Clause|BSD-3-Clause|ISC"
+          ILLEGAL_LICENSES=$(jq -r --arg ALLOWED "$ALLOWED_REGEX" '
+            [.vulnerabilities[]? | select(.type=="license") | select(.title | test($ALLOWED; "i") | not) | .title] | unique | join(", ")
+          ' snyk-report.json)
 
           echo "---------------------------------------"
           echo "🛡️ Security Issues: $VULN_COUNT"
-          echo "⚖️ License Violations: $LICENSE_VIOLATIONS"
+          echo "⚖️ Unauthorized Licenses: ${ILLEGAL_LICENSES:-None}"
           echo "---------------------------------------"
 
           if [ "$VULN_COUNT" -ne "0" ]; then 
-            echo "⛔ Snyk Gate: Found $VULN_COUNT High/Critical vulnerabilities."; exit 1; 
+            echo "⛔ Snyk Gate: Found $VULN_COUNT issues."; exit 1; 
           fi
 
-          if [ "$LICENSE_VIOLATIONS" -ne "0" ]; then 
-            echo "⛔ Legal Gate: Found $LICENSE_VIOLATIONS restricted licenses (Copyleft risk)."; exit 1; 
+          if [ ! -z "$ILLEGAL_LICENSES" ]; then 
+            echo "⛔ Legal Gate: Found unauthorized licenses: $ILLEGAL_LICENSES"; exit 1; 
           fi
-          
-          echo "✅ Security & License gate passed."
 
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
@@ -144,8 +143,7 @@ jobs:
         with:
           name: security-reports
           path: |
-            snyk-report.json
-            snyk-report.html
+            snyk-report.*
             trivy-report.txt
 
   # =================================================================
@@ -167,7 +165,7 @@ jobs:
           load: true
           tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
       
-      - name: Trivy Image Scan (SARIF @master)
+      - name: Trivy Image Scan (SARIF)
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
         with:
@@ -211,14 +209,14 @@ jobs:
     if: github.event_name != 'schedule'
     needs: [podman_build_push]
     runs-on: ubuntu-latest
-    name: 🔏 Cosign Sign
+    name: 🔏 Cosign Signing & Verification
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Sign Image
+      - name: Sign & Export Public Key
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
@@ -226,7 +224,20 @@ jobs:
           IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
           TAG="${GITHUB_SHA::7}"
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
+          
+          # 1. Signing
           cosign sign --key cosign.key -y "$IMAGE_PATH:$TAG"
+          
+          # 2. Public Key for Summary
+          cosign public-key --key cosign.key --outfile cosign.pub
+          echo "### 🔑 Cosign Public Key" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat cosign.pub >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "#### Signature Status for $IMAGE_PATH:$TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cosign verify --key cosign.pub "$IMAGE_PATH:$TAG" >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
   # STAGE 4: RUNTIME SECURITY (DAST)
@@ -267,4 +278,7 @@ jobs:
         run: |
           echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- ✅ Runtime: Node 24 Force Opt-in" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Status: All stages finished" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Security: Snyk (Zero-Trust License Whitelist)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Provenance: Cosign Signature & Public Key Verified" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Infrastructure: Podman & Docker Hub Integration" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Status: All stages finished successfully" >> "$GITHUB_STEP_SUMMARY"
