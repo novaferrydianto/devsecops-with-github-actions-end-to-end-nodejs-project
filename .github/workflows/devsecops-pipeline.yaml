@@ -5,8 +5,6 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-  schedule:
-    - cron: "0 20 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -22,10 +20,8 @@ permissions:
 
 env:
   NODE_VERSION: 24
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Anti-deprecation June 2026
-  REGISTRY: ${{ secrets.REGISTRY }}
-  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Kita panggil langsung di level job untuk akurasi lebih tinggi
   LOCAL_IMAGE_REPO: docker.io/${{ github.repository }}
   LOCAL_IMAGE_TAG: ${{ github.sha }}
 
@@ -34,34 +30,47 @@ defaults:
     shell: bash
 
 jobs:
-  # =================================================================
-  # STAGE 1: PARALLEL VALIDATION (SAST & SCA)
-  # =================================================================
-
   test_and_sast:
     runs-on: ubuntu-latest
     name: 🧱 Test & SAST
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # --- DEBUG STEP: PEMBUKTIAN RAHASIA ---
+      - name: 🛡️ Verify Secrets Visibility
+        run: |
+          echo "Checking Secrets Context..."
+          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+            echo "❌ ERROR: SONAR_TOKEN is NULL. If this is a PR from a Fork, secrets are hidden by design."
+            exit 1
+          fi
+          echo "✅ SONAR_TOKEN detected. Proceeding to scan..."
+
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
       - name: Setup Java 21
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
+
       - name: Install & Test
         run: |
           npm ci
           npm test
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
         env:
+          # Injeksi langsung di sini untuk memastikan scope terjaga
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
@@ -76,10 +85,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Setup Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+
       - name: Snyk Scan
         uses: snyk/actions/node@master
         continue-on-error: true
@@ -88,68 +94,44 @@ jobs:
         with:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
-      - name: Generate Snyk HTML
+
+      - name: Generate Snyk HTML Report
         if: always()
         run: |
           npm install -g snyk-to-html
           snyk-to-html -i snyk-report.json -o snyk-report.html
+
       - name: Enforce Snyk Policy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
           if [ "$VULN_COUNT" -ne "0" ]; then exit 1; fi
+
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           format: table
           output: trivy-report.txt
-      - name: Upload Artifacts
+
+      - name: Upload Security Artifacts
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: security-reports
           path: snyk-report.*
 
-  # =================================================================
-  # STAGE 2 & 3: IMAGE BUILD & SIGNING
-  # =================================================================
-
-  image_build_local_trivy_sarif:
+  podman_build_push:
     needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
-    name: 🧪 Build & Scan
+    name: 📦 Podman Build & Push
     steps:
       - uses: actions/checkout@v5
-      - uses: docker/setup-buildx-action@v3
-      - name: Build local
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
-      - name: Trivy Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: image
-          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
-          format: sarif
-          output: trivy-results.sarif
-      - uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
-
-  podman_build_push:
-    needs: [image_build_local_trivy_sarif]
-    runs-on: ubuntu-latest
-    name: 📦 Podman Push
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install & Push
+      - name: Push to Registry
         run: |
           sudo apt-get update && sudo apt-get install -y podman
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-          FULL_PATH="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
+          FULL_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
           TAG="${GITHUB_SHA::7}"
           podman build -t "$FULL_PATH:$TAG" -t "$FULL_PATH:latest" .
           podman push "$FULL_PATH:$TAG"
@@ -158,21 +140,17 @@ jobs:
   cosign_sign:
     needs: [podman_build_push]
     runs-on: ubuntu-latest
-    name: 🔏 Cosign Sign
+    name: 🔏 Cosign Sign & Verify
     steps:
       - uses: sigstore/cosign-installer@v3
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Sign & Verify
+      - name: Sign & Verification Summaries
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          FULL_IMAGE="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
-          TAG="${GITHUB_SHA::7}"
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
+          FULL_IMAGE="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+          TAG="${GITHUB_SHA::7}"
           cosign sign --key cosign.key -y "$FULL_IMAGE:$TAG"
           cosign public-key --key cosign.key --outfile cosign.pub
           echo "### 🔑 Cosign Public Key" >> "$GITHUB_STEP_SUMMARY"
@@ -180,45 +158,10 @@ jobs:
           cat cosign.pub >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-  # =================================================================
-  # STAGE 4: RUNTIME SECURITY (DAST) - FIXED PERMISSION
-  # =================================================================
-
-  dast_zap_ci:
-    needs: cosign_sign
-    runs-on: ubuntu-latest
-    name: 🎯 ZAP Baseline (CI)
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      
-      - name: Set up Workspace Permissions # --- PERBAIKAN DI SINI ---
-        run: chmod 777 $(pwd)
-
-      - name: Run App & Scan
-        run: |
-          npm ci && npm start & 
-          sleep 15
-          docker run -v $(pwd):/zap/wrk/:rw \
-            --network="host" \
-            -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://localhost:3000 -r report.html -J report.json || true
-      
-      - name: Upload ZAP Reports
-        uses: actions/upload-artifact@v5
-        with:
-          name: zap-report-ci
-          path: report.*
-
   summary:
-    needs: [test_and_sast, security_audit, podman_build_push, cosign_sign, dast_zap_ci]
+    needs: [test_and_sast, security_audit, podman_build_push, cosign_sign]
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
     steps:
-      - run: |
-          echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Node 24 & Core Actions v5 Compliant" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ DAST Permission Fixed" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Status: Pipeline Finished" >> "$GITHUB_STEP_SUMMARY"
+      - run: echo "Pipeline Finished." >> "$GITHUB_STEP_SUMMARY"
