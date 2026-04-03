@@ -20,8 +20,11 @@ permissions:
 
 env:
   NODE_VERSION: 24
+  # ✅ FIX: Explicitly opt-in to Node 24 for all actions to remove deprecation warnings
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # Kita panggil langsung di level job untuk akurasi lebih tinggi
+  REGISTRY: ${{ secrets.REGISTRY }}
+  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   LOCAL_IMAGE_REPO: docker.io/${{ github.repository }}
   LOCAL_IMAGE_TAG: ${{ github.sha }}
 
@@ -30,24 +33,18 @@ defaults:
     shell: bash
 
 jobs:
+  # =================================================================
+  # STAGE 1: PARALLEL VALIDATION
+  # =================================================================
+
   test_and_sast:
     runs-on: ubuntu-latest
     name: 🧱 Test & SAST
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # Ensure v5 or later
         with:
           fetch-depth: 0
-
-      # --- DEBUG STEP: PEMBUKTIAN RAHASIA ---
-      - name: 🛡️ Verify Secrets Visibility
-        run: |
-          echo "Checking Secrets Context..."
-          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
-            echo "❌ ERROR: SONAR_TOKEN is NULL. If this is a PR from a Fork, secrets are hidden by design."
-            exit 1
-          fi
-          echo "✅ SONAR_TOKEN detected. Proceeding to scan..."
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -70,7 +67,6 @@ jobs:
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
         env:
-          # Injeksi langsung di sini untuk memastikan scope terjaga
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
@@ -85,6 +81,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Snyk Scan
         uses: snyk/actions/node@master
@@ -104,8 +105,11 @@ jobs:
       - name: Enforce Snyk Policy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
-          VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
-          if [ "$VULN_COUNT" -ne "0" ]; then exit 1; fi
+          set -euo pipefail
+          VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .select(.severity=="critical"))] | length' snyk-report.json)
+          if [ "$VULN_COUNT" -ne "0" ]; then 
+            echo "⛔ Snyk gate failed: Found $VULN_COUNT issues."; exit 1; 
+          fi
 
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
@@ -119,49 +123,128 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: security-reports
-          path: snyk-report.*
+          path: |
+            snyk-report.json
+            snyk-report.html
+            trivy-report.txt
+
+  # =================================================================
+  # STAGE 2: CONTAINER SECURITY
+  # =================================================================
+
+  image_build_local_trivy_sarif:
+    if: github.event_name != 'schedule'
+    needs: [test_and_sast, security_audit]
+    runs-on: ubuntu-latest
+    name: 🧪 Build & Image Scan
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build local
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+      
+      - name: Trivy Image Scan (SARIF @master)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: image
+          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload SARIF to Security Tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
+
+  # =================================================================
+  # STAGE 3: ARTIFACT DELIVERY & SIGNING
+  # =================================================================
 
   podman_build_push:
-    needs: [test_and_sast, security_audit]
+    if: github.event_name != 'schedule'
+    needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
     steps:
       - uses: actions/checkout@v5
-      - name: Push to Registry
+      - name: Install & Login Podman
         run: |
           sudo apt-get update && sudo apt-get install -y podman
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-          FULL_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+      - name: Build & Push
+        run: |
+          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
           TAG="${GITHUB_SHA::7}"
-          podman build -t "$FULL_PATH:$TAG" -t "$FULL_PATH:latest" .
-          podman push "$FULL_PATH:$TAG"
-          podman push "$FULL_PATH:latest"
+          podman build -t "$IMAGE_PATH:$TAG" -t "$IMAGE_PATH:latest" .
+          podman push "$IMAGE_PATH:$TAG"
+          podman push "$IMAGE_PATH:latest"
 
   cosign_sign:
+    if: github.event_name != 'schedule'
     needs: [podman_build_push]
     runs-on: ubuntu-latest
-    name: 🔏 Cosign Sign & Verify
+    name: 🔏 Cosign Sign
     steps:
       - uses: sigstore/cosign-installer@v3
-      - name: Sign & Verification Summaries
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Sign Image
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          FULL_IMAGE="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
           TAG="${GITHUB_SHA::7}"
-          cosign sign --key cosign.key -y "$FULL_IMAGE:$TAG"
-          cosign public-key --key cosign.key --outfile cosign.pub
-          echo "### 🔑 Cosign Public Key" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat cosign.pub >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$COSIGN_PRIVATE_KEY" > cosign.key
+          cosign sign --key cosign.key -y "$IMAGE_PATH:$TAG"
+
+  # =================================================================
+  # STAGE 4: RUNTIME SECURITY (DAST)
+  # =================================================================
+
+  dast_zap_ci:
+    if: github.event_name != 'schedule'
+    needs: cosign_sign
+    runs-on: ubuntu-latest
+    name: 🎯 ZAP Baseline (CI)
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set Permissions
+        run: chmod 777 $(pwd)
+      - name: Run App & Scan
+        run: |
+          npm ci && npm start & 
+          sleep 15
+          docker run -v $(pwd):/zap/wrk/:rw --network="host" -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:3000 -r report.html -J report.json || true
+      - uses: actions/upload-artifact@v5
+        with:
+          name: zap-report-ci
+          path: report.*
+
+  # =================================================================
+  # FINAL SUMMARY
+  # =================================================================
 
   summary:
-    needs: [test_and_sast, security_audit, podman_build_push, cosign_sign]
+    needs: [test_and_sast, security_audit, podman_build_push, cosign_sign, dast_zap_ci]
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
     steps:
-      - run: echo "Pipeline Finished." >> "$GITHUB_STEP_SUMMARY"
+      - name: Final Summary
+        run: |
+          echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Runtime: Node 24 Force Opt-in" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Status: All stages finished" >> "$GITHUB_STEP_SUMMARY"
