@@ -1,0 +1,39 @@
+name: 🛡️ Security Self-Healing
+
+on:
+  workflow_run:
+    # Nama workflow utama Bapak (sesuaikan dengan nama di devsecops-pipeline.yml)
+    workflows: ["DevSecOps Pipeline"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  close-resolved-issues:
+    runs-on: ubuntu-latest
+    # Hanya berjalan jika pipeline utama BERHASIL (Success)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: 🔍 Find and Close Resolved Security Issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Pipeline sukses! Memulai pembersihan tiket keamanan..."
+          
+          # 1. Ambil daftar issue yang memiliki label 'security' dan 'needs-triage'
+          ISSUES=$(gh issue list --label "security" --label "high-risk" --json number --jq '.[].number')
+          
+          if [ -z "$ISSUES" ]; then
+            echo "✅ Tidak ada tiket keamanan yang terbuka. Bagus!"
+            exit 0
+          fi
+          
+          # 2. Iterasi dan tutup tiket
+          for ISSUE_NUMBER in $ISSUES; do
+            echo "Closing issue #$ISSUE_NUMBER..."
+            gh issue comment $ISSUE_NUMBER --body "✅ **Self-Healing Triggered**: Build #${{ github.event.workflow_run.run_number }} sukses. Sistem mendeteksi bahwa kerentanan ini telah diperbaiki atau dimitigasi. Menutup tiket secara otomatis."
+            gh issue close $ISSUE_NUMBER --reason "completed"
+          done
