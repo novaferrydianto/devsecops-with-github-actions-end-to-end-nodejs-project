@@ -38,7 +38,8 @@ fetchWeather(location)
   })
   .catch((err) => {
     console.error('❌ Failed to fetch weather data:', err?.message || err);
-    process.exit(1);
+    console.log('⚠️ Starting fallback server for health checks & DAST...');
+    startServer({ error: "API connection failed, fallback mode active" });
   });
 
 // 🎨 Helpers
