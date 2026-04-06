@@ -110,7 +110,7 @@ jobs:
           if [ "$VULN_COUNT" -ne "0" ] || [ ! -z "$ILLEGAL_LICENSES" ]; then exit 1; fi
           
       - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
           format: table
@@ -144,7 +144,7 @@ jobs:
           tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           
       - name: Trivy Image Scan (SARIF)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.35.0
         continue-on-error: true
         with:
           scan-type: image
@@ -161,7 +161,7 @@ jobs:
           category: trivy-image
 
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
