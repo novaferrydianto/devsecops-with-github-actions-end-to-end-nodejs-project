@@ -17,9 +17,12 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Optimasi Layer Cache: Copy package files dulu
+# Optimasi Layer Cache & Security Patch: Copy package files dan upgrade OS package dasar
 COPY package*.json ./
 COPY fix-mocha-exit.js ./
+
+# Upgrade system library untuk mitigasi kerentanan (misal libc6) pada tahap builder
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # Install hanya dependensi produksi secara bersih
 RUN npm ci --only=production
@@ -30,8 +33,8 @@ COPY . .
 ######################
 # STAGE 2: RUNTIME (HARDENED)
 ######################
-# Update ke nodejs24 untuk menghindari deprecation Node 20
-FROM gcr.io/distroless/nodejs24-debian12:nonroot@sha256:14d42e2511532589a7c7e01a753667a74fcc96266e137e8125006b87b0c32d0a AS runtime
+# Menggunakan tag dinamis nonroot (tanpa hardcoded SHA) agar selalu mendapatkan security patch terbaru (seperti libc6 dsb)
+FROM gcr.io/distroless/nodejs24-debian12:nonroot AS runtime
 
 # Metadata Image
 LABEL org.opencontainers.image.source="https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project"

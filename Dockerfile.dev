@@ -1,9 +1,10 @@
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
-# Install nodemon globally for dev
-RUN npm install -g nodemon
+# Upgrade OS packages to mitigate vulnerabilities and install nodemon
+RUN apk upgrade --no-cache && \
+    npm install -g nodemon
 
 # Copy package files first
 COPY package*.json ./
