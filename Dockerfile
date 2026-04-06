@@ -8,6 +8,9 @@ FROM node:24-bookworm-slim AS builder
 LABEL stage=builder
 LABEL maintainer="Nova Ferry Dianto"
 
+# Setting DOCKERFILE_DATE forces a build cache refresh for the package upgrades
+ENV DOCKERFILE_DATE=2026-04-06
+
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV NODE_ENV=production
@@ -28,7 +31,7 @@ COPY . .
 # STAGE 2: RUNTIME (HARDENED)
 ######################
 # Update ke nodejs24 untuk menghindari deprecation Node 20
-FROM gcr.io/distroless/nodejs24-debian12:nonroot AS runtime
+FROM gcr.io/distroless/nodejs24-debian12:nonroot@sha256:14d42e2511532589a7c7e01a753667a74fcc96266e137e8125006b87b0c32d0a AS runtime
 
 # Metadata Image
 LABEL org.opencontainers.image.source="https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project"
