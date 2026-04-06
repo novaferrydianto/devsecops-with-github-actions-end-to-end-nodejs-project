@@ -276,12 +276,12 @@ jobs:
             ALERTS=$(jq '[.site[].alerts[]?] | length' report.json || echo "0")
             if [ "$ALERTS" -gt "0" ]; then
               echo "Creating ZAP DAST Issue for $ALERTS alerts..."
-              EXISTING_ISSUE=$(gh issue list -R $REPO --label "dast" --state open --json number --jq '.[0].number')
+              EXISTING_ISSUE=$(gh issue list -R $REPO --label "security" --state open --json number --jq '.[0].number')
               if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
                 gh issue create -R $REPO \
                   --title "🎯 DAST ZAP Vulnerabilities Detected" \
                   --body "OWASP ZAP mendeteksi **$ALERTS** buah kelemahan keamanan (seperti missing security headers) saat menguji server aplikasi yang sedang menyala secara live. Silakan unduh bukti \`report.html\` di tab **Artifacts**." \
-                  --label "security,dast"
+                  --label "security"
               else
                 gh issue comment $EXISTING_ISSUE -R $REPO --body "⚠️ **Update**: Owasp ZAP DAST masih mendeteksi $ALERTS peringatan kerentanan pada build #${{ github.run_number }}."
               fi

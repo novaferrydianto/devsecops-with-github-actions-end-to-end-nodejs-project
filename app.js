@@ -71,8 +71,8 @@ function startServer(today) {
     res.end('✅ Weather app running — ready for ZAP scan!\n');
   });
 
-  server.listen(PORT, () => {
-    console.log(`\n🌦️ App running securely at http://localhost:${PORT}`.yellow);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🌦️ App running securely at http://0.0.0.0:${PORT}`.yellow);
   });
 }
 
