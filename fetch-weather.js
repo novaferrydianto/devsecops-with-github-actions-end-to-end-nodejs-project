@@ -4,7 +4,11 @@
  * Fully respects global.fetch stubs in tests.
  */
 
-const APP_ID = "aa0f1b0be45dca476178787f941c76dc";
+const APP_ID = process.env.OPENWEATHER_API_KEY;
+
+if (!APP_ID) {
+  throw new Error("CRITICAL STARTUP ERROR: OPENWEATHER_API_KEY environment variable is missing.");
+}
 
 /**
  * Fetch and process weather data
@@ -13,7 +17,8 @@ const APP_ID = "aa0f1b0be45dca476178787f941c76dc";
  */
 export async function fetchWeather(location) {
   const fetchFn = global.fetch || (await import("node-fetch")).default;
-  const url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${APP_ID}`;
+  const safeLocation = encodeURIComponent(location);
+  const url = `https://api.openweathermap.org/data/2.5/weather?q=${safeLocation}&appid=${APP_ID}`;
 
   try {
     const res = await fetchFn(url);
