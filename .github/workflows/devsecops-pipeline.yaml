@@ -40,21 +40,25 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          
       - name: Setup Java 21
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
+          
       - name: Install & Test
         run: |
           npm ci
           npm test
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
+          
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
         env:
@@ -80,11 +84,13 @@ jobs:
         with:
           command: test
           args: --severity-threshold=low --json-file-output=snyk-report.json
+          
       - name: Generate Snyk HTML Report
         if: always()
         run: |
           npm install -g snyk-to-html
           snyk-to-html -i snyk-report.json -o snyk-report.html
+          
       - name: Enforce Security & Whitelist License Policy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
@@ -96,12 +102,14 @@ jobs:
             [.vulnerabilities[]? | select(.type=="license") | select(.title | test($ALLOWED; "i") | not) | .title] | unique | join(", ")
           ' snyk-report.json)
           if [ "$VULN_COUNT" -ne "0" ] || [ ! -z "$ILLEGAL_LICENSES" ]; then exit 1; fi
+          
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           format: table
           output: trivy-report.txt
+          
       - name: Upload Security Artifacts
         if: always()
         uses: actions/upload-artifact@v5
@@ -128,6 +136,7 @@ jobs:
           context: .
           load: true
           tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+          
       - name: Trivy Image Scan (SARIF)
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
@@ -137,6 +146,7 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          
       - name: Upload SARIF to Security Tab
         uses: github/codeql-action/upload-sarif@v4
         if: always()
