@@ -15,28 +15,32 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 ## 🌟 Key Features
 
 ### Build & Quality
-- Node.js 20 LTS
+- Node.js 24
 - Unit testing with Mocha, Chai, Sinon
 - 80%+ coverage via NYC
 - Clean code structure & linting
 
 ### DevSecOps Security Pipeline
-1. **SAST — SonarCloud**  
+1. **Secret Scanning — Gitleaks**
+   - Active protection against leaked tokens & credentials in commits.
+
+2. **SAST — SonarCloud**  
    EN: Detects bugs & vulnerabilities  
    ID: Analisis statis mendeteksi bug sejak awal
 
-2. **SCA — Snyk**  
+3. **SCA — Snyk**  
    Auto-fail untuk severity High/Critical
 
-3. **Container Security — Podman + Trivy**  
+4. **Container Security — Podman + Trivy**  
    - Rootless container build  
+   - Automatically generates CycloneDX SBOM
    - Trivy filesystem & OS package scan
 
-4. **Supply Chain Security — Cosign**  
+5. **Supply Chain Security — Cosign**  
    - Image signing  
    - Prevent tampering & ensure provenance
 
-5. **DAST — OWASP ZAP**  
+6. **DAST — OWASP ZAP**  
    - Full dynamic scan  
    - HTML/JSON reports  
    - Auto-create GitHub Issues
@@ -87,7 +91,7 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 ## 🚀 Quick Start (Podman/Docker)
 
 ### English
-```
+```bash
 podman build -t weather-app .
 
 podman run -d \
@@ -104,7 +108,7 @@ podman run -d \
 Access at: http://localhost:3000
 
 ### Indonesian
-```
+```bash
 podman build -t weather-app .
 
 podman run -d -p 3000:3000 \
@@ -124,7 +128,7 @@ Akses: http://localhost:3000
 ## ⚡ Quick Start (Local Development)
 
 ### English
-```
+```bash
 npm install
 npm test
 npm run cover
@@ -132,7 +136,7 @@ npm start
 ```
 
 ### Indonesian
-```
+```bash
 npm install
 npm test
 npm run cover
@@ -147,9 +151,10 @@ App running at: http://localhost:3000
 
 | Layer | Tool | Description |
 |-------|------|-------------|
+| Secret Scanning | Gitleaks | Detect hardcoded credentials |
 | SAST | SonarCloud | Static analysis |
 | SCA | Snyk | Dependency scan |
-| SBOM | Syft | Software Bill of Materials |
+| SBOM | Trivy | Software Bill of Materials (CycloneDX) |
 | Container Scan | Trivy | OS & FS vulnerability scan |
 | Signing | Cosign | Image signature & provenance |
 | DAST | OWASP ZAP | Runtime penetration testing |
@@ -160,16 +165,17 @@ App running at: http://localhost:3000
 
 ```
 1. Checkout source code
-2. Install dependencies
-3. Unit Tests + Coverage
-4. SonarCloud SAST Scan
-5. Snyk SCA Scan
-6. Podman rootless image build
-7. Generate SBOM (Syft)
-8. Trivy container scan
-9. Cosign image signing
-10. OWASP ZAP DAST scan
-11. Upload reports + GitHub Summary
+2. Secret Scan (Gitleaks)
+3. Install dependencies
+4. Unit Tests + Coverage
+5. SonarCloud SAST Scan
+6. Snyk SCA Scan
+7. Podman rootless image build
+8. Generate SBOM (Trivy CycloneDX)
+9. Trivy container scan
+10. Cosign image signing
+11. OWASP ZAP DAST scan
+12. Upload reports + GitHub Summary
 ```
 
 ---
