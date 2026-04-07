@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+# ✅ Force Node 24 across all jobs in this workflow
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   analysis:
     name: Scorecard analysis
@@ -32,8 +36,6 @@ jobs:
       # 🔄 DEPENDABOT HANDOFF: Menggunakan Tag stabil, biarkan Dependabot yang mencari SHA-nya
       - name: "Run analysis"
         uses: ossf/scorecard-action@v2.4.3
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           results_file: results.sarif
           results_format: sarif
