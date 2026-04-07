@@ -1,10 +1,10 @@
 name: DevSecOps Pipeline
 
 on:
-#  push:
-#    branches: [master]
-#  pull_request:
-#    branches: [master]
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -120,7 +120,7 @@ jobs:
           
       - name: Upload Security Artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: snyk-report.*
@@ -254,7 +254,7 @@ jobs:
         run: |
           docker run -v $(pwd):/zap/wrk/:rw --network="host" -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:3000 -r report.html -J report.json || true
           
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v4
         with:
           name: zap-report-ci
           path: report.*

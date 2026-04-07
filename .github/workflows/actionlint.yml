@@ -24,9 +24,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f # v4.1.1
         
-      # ✅ Hardened & FIXED: SHA Pinning untuk versi 1.7.7
-      # Mengatasi error "unable to find version v1" secara permanen
+      # ✅ Hardened & FIXED: Menggunakan action resmi reviewdog/action-actionlint
       - name: Run Actionlint
-        uses: rhysd/actionlint@5fb25d204d80582d96639d6e4b48ed0ff3c8a9ed # v1.7.7
+        uses: reviewdog/action-actionlint@v1
         with:
           shellcheck: true
