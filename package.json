@@ -62,7 +62,11 @@
   "overrides": {
     "serialize-javascript": "^7.0.3",
     "mocha": {
-      "minimatch": "^9.0.6"
+      "diff": "^8.0.4",
+      "minimatch": {
+        ".": "^9.0.6",
+        "brace-expansion": "^2.0.3"
+      }
     }
   }
 }
