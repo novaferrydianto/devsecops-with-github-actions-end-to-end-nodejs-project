@@ -27,5 +27,3 @@ jobs:
       # ✅ Hardened & FIXED: Menggunakan action resmi reviewdog/action-actionlint
       - name: Run Actionlint
         uses: reviewdog/action-actionlint@v1
-        with:
-          shellcheck: true
