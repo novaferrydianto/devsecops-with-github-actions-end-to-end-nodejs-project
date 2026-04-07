@@ -59,5 +59,11 @@
     "hookRequire": true,
     "hookRunInContext": true,
     "hookRunInThisContext": true
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.3",
+    "mocha": {
+      "minimatch": "^9.0.6"
+    }
   }
 }
