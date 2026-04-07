@@ -278,7 +278,8 @@ jobs:
                   --body "OWASP ZAP mendeteksi **$ALERTS** buah kelemahan keamanan (seperti missing security headers) saat menguji server aplikasi yang sedang menyala secara live. Silakan unduh bukti \`report.html\` di tab **Artifacts**." \
                   --label "security"
               else
-                gh issue comment $EXISTING_ISSUE -R $REPO --body "⚠️ **Update**: Owasp ZAP DAST masih mendeteksi $ALERTS peringatan kerentanan pada build #${{ github.run_number }}."
+                ALERTS_DETAIL=$(jq '.site[0].alerts[]? | "- \(.name) (\(.riskdesc))"' report.json -r | head -n 5 || echo "- Unable to parse alert details")
+                gh issue comment $EXISTING_ISSUE -R $REPO --body "⚠️ **Update**: Owasp ZAP DAST masih mendeteksi $ALERTS peringatan kerentanan pada build #${{ github.run_number }}."$'\n\n'"**Rincian Teratas:**"$'\n'"$ALERTS_DETAIL"
               fi
             else
               if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
