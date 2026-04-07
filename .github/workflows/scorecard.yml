@@ -11,9 +11,6 @@ on:
 permissions:
   contents: read
 
-# ✅ Force Node 24 across all jobs in this workflow
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   analysis:
@@ -30,12 +27,16 @@ jobs:
       # ✅ Hardened: SHA Pinning for Checkout (Ini sudah valid)
       - name: "Checkout code"
         uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f # v4.1.1
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           persist-credentials: false
 
       # 🔄 DEPENDABOT HANDOFF: Menggunakan Tag stabil, biarkan Dependabot yang mencari SHA-nya
       - name: "Run analysis"
         uses: ossf/scorecard-action@v2.4.3
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           results_file: results.sarif
           results_format: sarif
@@ -48,6 +49,8 @@ jobs:
       # 🔄 DEPENDABOT HANDOFF: Kembali ke tag v4
       - name: "Upload artifact"
         uses: actions/upload-artifact@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           name: SARIF file
           path: results.sarif
@@ -56,5 +59,7 @@ jobs:
       # 🔄 DEPENDABOT HANDOFF: Kembali ke tag v3
       - name: "Upload to code-scanning"
         uses: github/codeql-action/upload-sarif@v3
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           sarif_file: results.sarif
