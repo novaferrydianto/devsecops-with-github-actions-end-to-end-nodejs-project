@@ -1,10 +1,10 @@
 name: DevSecOps Pipeline
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+#  push:
+#    branches: [master]
+#  pull_request:
+#    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -183,6 +183,7 @@ jobs:
   # =================================================================
   podman_build_push:
     needs: [image_build_local_trivy_sarif]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
     steps:
@@ -201,6 +202,7 @@ jobs:
 
   cosign_sign:
     needs: [podman_build_push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 🔏 Cosign Sign & Verify
     steps:
@@ -228,7 +230,7 @@ jobs:
   # STAGE 4: DAST
   # =================================================================
   dast_zap_ci:
-    needs: cosign_sign
+    needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
     name: 🎯 ZAP Baseline (CI)
     continue-on-error: true
@@ -239,21 +241,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         
-      - name: Docker Login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
       - name: Set Permissions
         run: chmod 777 $(pwd)
         
-      - name: Pull and Run App Container
+      - name: Build and Run App Container Locally
         run: |
-          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
-          TAG="${GITHUB_SHA::7}"
-          docker pull "$IMAGE_PATH:$TAG"
-          docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy-token-for-dast" "$IMAGE_PATH:$TAG"
+          docker build -t app-local-dast .
+          docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy-token-for-dast" app-local-dast
           sleep 15
           
       - name: ZAP Baseline Scan
