@@ -42,7 +42,7 @@ LABEL node.runtime.version="24"
 WORKDIR /app
 
 # Copy artifact dari builder dengan izin nonroot
-COPY --chown=nonroot:nonroot --from=builder /app /app
+COPY --chown=nonroot:nonroot --chmod=0555 --from=builder /app /app
 
 # Ekspos port aplikasi
 EXPOSE 3000
