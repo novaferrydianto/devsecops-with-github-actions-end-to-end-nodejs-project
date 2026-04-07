@@ -12,7 +12,8 @@ concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 # ✅ REMEDIATION 1: Force Node 24 across all jobs in this workflow
 env:

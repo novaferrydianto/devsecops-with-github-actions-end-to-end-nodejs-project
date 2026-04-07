@@ -11,9 +11,7 @@ concurrency:
   group: devsecops-${{ github.ref }}
   cancel-in-progress: false
 
-# ✅ STEP 1: Global Lockdown - Principle of Least Privilege
-permissions:
-  contents: read
+# ✅ STEP 1: Global Lockdown - Principle of Least Privilege (Moved to Job Level)
 
 env:
   NODE_VERSION: 24
@@ -35,6 +33,8 @@ jobs:
   test_and_sast:
     runs-on: ubuntu-latest
     name: 🧱 Test & SAST
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -73,6 +73,8 @@ jobs:
   security_audit:
     runs-on: ubuntu-latest
     name: 🧩 SCA, License & FS Audit
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -186,6 +188,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - name: Install & Login Podman
@@ -205,6 +209,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 🔏 Cosign Sign & Verify
+    permissions:
+      contents: read
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: docker/login-action@v3
@@ -300,6 +306,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
+    permissions:
+      contents: read
     steps:
       - name: Final Summary
         run: |
