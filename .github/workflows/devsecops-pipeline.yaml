@@ -120,7 +120,7 @@ jobs:
           
       - name: Upload Security Artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: snyk-report.*
@@ -183,6 +183,7 @@ jobs:
   # =================================================================
   podman_build_push:
     needs: [image_build_local_trivy_sarif]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
     steps:
@@ -201,6 +202,7 @@ jobs:
 
   cosign_sign:
     needs: [podman_build_push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 🔏 Cosign Sign & Verify
     steps:
@@ -219,16 +221,18 @@ jobs:
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
           cosign sign --key cosign.key -y "$IMAGE_PATH:$TAG"
           cosign public-key --key cosign.key --outfile cosign.pub
-          echo "### 🔑 Cosign Public Key" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat cosign.pub >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### 🔑 Cosign Public Key"
+            echo '```'
+            cat cosign.pub
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
   # STAGE 4: DAST
   # =================================================================
   dast_zap_ci:
-    needs: cosign_sign
+    needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
     name: 🎯 ZAP Baseline (CI)
     continue-on-error: true
@@ -239,28 +243,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         
-      - name: Docker Login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
       - name: Set Permissions
-        run: chmod 777 $(pwd)
+        run: chmod 777 "$(pwd)"
         
-      - name: Pull and Run App Container
+      - name: Build and Run App Container Locally
         run: |
-          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
-          TAG="${GITHUB_SHA::7}"
-          docker pull "$IMAGE_PATH:$TAG"
-          docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy-token-for-dast" "$IMAGE_PATH:$TAG"
+          docker build -t app-local-dast .
+          docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy-token-for-dast" app-local-dast
           sleep 15
           
       - name: ZAP Baseline Scan
         run: |
-          docker run -v $(pwd):/zap/wrk/:rw --network="host" -t ghcr.io/zaproxy/zaproxy:2.14.0 zap-baseline.py -t http://localhost:3000 -r report.html -J report.json || true
+          docker run -v "$(pwd):/zap/wrk/:rw" --network="host" -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:3000 -r report.html -J report.json || true
           
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v4
         with:
           name: zap-report-ci
           path: report.*
@@ -274,16 +270,24 @@ jobs:
           if [ -f report.json ]; then
             # Parse jumlah alert (Abaikan Riskcode 0 / Informational)
             ALERTS=$(jq '[.site[].alerts[]? | select(.riskcode != "0")] | length' report.json || echo "0")
+            EXISTING_ISSUE=$(gh issue list -R "$REPO" --label "security" --state open --json number --jq '.[0].number')
             if [ "$ALERTS" -gt "0" ]; then
               echo "Creating ZAP DAST Issue for $ALERTS alerts..."
-              EXISTING_ISSUE=$(gh issue list -R $REPO --label "security" --state open --json number --jq '.[0].number')
               if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
-                gh issue create -R $REPO \
+                gh issue create -R "$REPO" \
                   --title "🎯 DAST ZAP Vulnerabilities Detected" \
                   --body "OWASP ZAP mendeteksi **$ALERTS** buah kelemahan keamanan (seperti missing security headers) saat menguji server aplikasi yang sedang menyala secara live. Silakan unduh bukti \`report.html\` di tab **Artifacts**." \
                   --label "security"
               else
-                gh issue comment $EXISTING_ISSUE -R $REPO --body "⚠️ **Update**: Owasp ZAP DAST masih mendeteksi $ALERTS peringatan kerentanan pada build #${{ github.run_number }}."
+                ALERTS_DETAIL=$(jq '.site[0].alerts[]? | "- \(.name) (\(.riskdesc))"' report.json -r | head -n 5 || echo "- Unable to parse alert details")
+                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update**: Owasp ZAP DAST masih mendeteksi $ALERTS peringatan kerentanan pada build #${{ github.run_number }}."$'\n\n'"**Rincian Teratas:**"$'\n'"$ALERTS_DETAIL"
+              fi
+            else
+              if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
+                echo "ZAP alerts resolved! Auto-closing issue #$EXISTING_ISSUE..."
+                gh issue close "$EXISTING_ISSUE" -R "$REPO" -c "✅ **Resolved**: Kerentanan telah diperbaiki. Hasil scan OWASP ZAP terbaru mendeteksi 0 *alerts* (Aman)."
+              else
+                echo "No ZAP alerts detected. System is clean."
               fi
             fi
           fi
@@ -299,8 +303,10 @@ jobs:
     steps:
       - name: Final Summary
         run: |
-          echo "## DevSecOps Pipeline — Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Runtime: Node 24 (Hardened)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Security: PoLP Job-level Permissions" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Compliance: ISC License & Cosign Provenance" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Status: Production Ready" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## DevSecOps Pipeline — Summary"
+            echo "- ✅ Runtime: Node 24 (Hardened)"
+            echo "- ✅ Security: PoLP Job-level Permissions"
+            echo "- ✅ Compliance: ISC License & Cosign Provenance"
+            echo "- ✅ Status: Production Ready"
+          } >> "$GITHUB_STEP_SUMMARY"

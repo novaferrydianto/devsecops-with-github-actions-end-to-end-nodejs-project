@@ -9,8 +9,7 @@
     "start:secure": "AIKIDO_BLOCK=true node app.js",
     "test": "cross-env OPENWEATHER_API_KEY=test-api-token mocha --reporter mocha-sonarqube-reporter --reporter-options output=xunit.xml test --exit",
     "cover": "cross-env OPENWEATHER_API_KEY=test-api-token NODE_OPTIONS=--experimental-vm-modules nyc --reporter=text --reporter=lcov mocha --exit",
-    "precover": "rm -rf .nyc_output coverage",
-    "postinstall": "node fix-mocha-exit.js"
+    "precover": "rm -rf .nyc_output coverage"
   },
   "author": "Nova Ferrydianto <novaferrydianto@gmail.com>",
   "license": "ISC",

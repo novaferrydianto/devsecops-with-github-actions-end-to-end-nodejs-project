@@ -59,6 +59,9 @@ function startServer(today) {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=()');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
 
     if (req.url === '/health') {
       return json(res, { status: 'ok', message: '🛡️ Healthy and secure!' });
@@ -68,8 +71,13 @@ function startServer(today) {
       return json(res, { location, weather: today });
     }
 
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('✅ Weather app running — ready for ZAP scan!\n');
+    if (req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('✅ Weather app running — ready for ZAP scan!\n');
+    }
+
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('❌ 404 Not Found\n');
   });
 
   server.listen(PORT, '0.0.0.0', () => {
@@ -78,6 +86,6 @@ function startServer(today) {
 }
 
 function json(res, obj) {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(obj));
 }

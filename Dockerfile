@@ -19,8 +19,6 @@ WORKDIR /app
 
 # Optimasi Layer Cache & Security Patch: Copy package files dan upgrade OS package dasar
 COPY package*.json ./
-COPY fix-mocha-exit.js ./
-
 # Upgrade system library untuk mitigasi kerentanan (misal libc6) pada tahap builder
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
