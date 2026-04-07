@@ -272,8 +272,8 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           if [ -f report.json ]; then
-            # Parse jumlah alert 
-            ALERTS=$(jq '[.site[].alerts[]?] | length' report.json || echo "0")
+            # Parse jumlah alert (Abaikan Riskcode 0 / Informational)
+            ALERTS=$(jq '[.site[].alerts[]? | select(.riskcode != "0")] | length' report.json || echo "0")
             if [ "$ALERTS" -gt "0" ]; then
               echo "Creating ZAP DAST Issue for $ALERTS alerts..."
               EXISTING_ISSUE=$(gh issue list -R $REPO --label "security" --state open --json number --jq '.[0].number')

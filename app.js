@@ -57,6 +57,7 @@ function startServer(today) {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Cache-Control', 'no-store');
 
     if (req.url === '/health') {
