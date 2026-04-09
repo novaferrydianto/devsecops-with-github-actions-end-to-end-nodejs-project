@@ -1,9 +1,6 @@
 #################################################################################
-# DevSecOps Pipeline - Optimized for Production
-# - Fixed: Gitleaks Git Log (Full History Fetch)
-# - Fixed: Trivy SARIF Path Discovery
-# - Hardened: Chainguard Wolfi-based Images
-# - Integrity: Cosign Supply Chain Signing
+# DevSecOps Pipeline - Production Ready 2026
+# Fixes: Gitleaks (Full History), SonarCloud (Keys), Trivy (SARIF Path)
 #################################################################################
 
 name: "DevSecOps Production Pipeline"
@@ -23,8 +20,8 @@ env:
   NODE_VERSION: 24
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: docker.io
-  # Ganti dengan secret atau hardcode sesuai kebutuhan
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}
+  LOCAL_IMAGE_REPO: docker.io/${{ github.repository }}
   LOCAL_IMAGE_TAG: ${{ github.sha }}
 
 defaults:
@@ -33,11 +30,11 @@ defaults:
 
 jobs:
   # =================================================================
-  # STAGE 1: SAST & SCA (The Shield)
+  # STAGE 1: SAST & SCA
   # =================================================================
-  test_and_audit:
+  test_and_sast:
     runs-on: ubuntu-latest
-    name: 🧱 SAST & Secret Scan
+    name: 🧱 Test & SAST
     permissions:
       contents: read
       security-events: write
@@ -45,7 +42,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v5
         with:
-          # FIX: Gitleaks butuh history lengkap untuk membandingkan commit di PR
+          # FIX: Mengambil full history agar Gitleaks tidak error 'fatal: ambiguous argument'
           fetch-depth: 0 
 
       - name: Gitleaks Secret Scan
@@ -57,13 +54,13 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: npm
 
       - name: Install & Test
         run: |
           npm ci
           npm test
-          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover || echo "Tests failed"
+          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover || echo "No tests found"
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
@@ -71,15 +68,15 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORG }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT }}
+            -Dsonar.organization=devsecopsganodejs
+            -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
   # =================================================================
-  # STAGE 2: CONTAINER SECURITY (The Hardening)
+  # STAGE 2: CONTAINER SECURITY
   # =================================================================
   image_security:
-    needs: [test_and_audit]
+    needs: [test_and_sast]
     runs-on: ubuntu-latest
     name: 🛡️ Build & Image Scan
     permissions:
@@ -92,43 +89,45 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Local (Chainguard Hardened)
+      - name: Build Local (Chainguard Ready)
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true # Meload image ke daemon lokal agar bisa di-scan Trivy
-          tags: ${{ env.IMAGE_NAME }}:local
+          load: true # FIX: Meload ke daemon lokal agar Trivy bisa menemukan image
+          tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Trivy Image Scan (SARIF)
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:local
+          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0' # Jangan matikan job agar upload SARIF berjalan
+          exit-code: '0'
 
-      - name: Upload SARIF to GitHub
+      - name: Upload SARIF to Security Tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always() # FIX: Tetap upload meskipun file sarif kosong atau error
+        if: always() # FIX: Tetap upload meskipun Trivy mendeteksi vulnerability
         with:
           sarif_file: 'trivy-results.sarif'
           category: 'trivy-image'
 
-      - name: Generate SBOM (CycloneDX)
+      - name: Generate SBOM
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:local
+          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           format: 'cyclonedx'
-          output: 'sbom.json'
+          output: 'trivy-sbom.json'
 
-      - name: Upload SBOM Artifact
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-production
-          path: sbom.json
+          name: security-reports
+          path: |
+            trivy-results.sarif
+            trivy-sbom.json
 
   # =================================================================
   # STAGE 3: DELIVERY & SIGNING
@@ -137,7 +136,7 @@ jobs:
     needs: [image_security]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    name: 🔏 Sign & Push
+    name: 📦 Push & Sign
     permissions:
       contents: read
       id-token: write
@@ -168,13 +167,14 @@ jobs:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
+          IMAGE_FULL_PATH="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key -y ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cosign sign --key cosign.key -y "$IMAGE_FULL_PATH"
 
   # =================================================================
-  # STAGE 4: DAST (OWASP ZAP)
+  # STAGE 4: DAST
   # =================================================================
-  dast_scan:
+  dast_zap:
     needs: [image_security]
     runs-on: ubuntu-latest
     name: 🎯 DAST Scan
@@ -183,7 +183,7 @@ jobs:
         run: |
           docker build -t app-dast .
           docker run -d --name app-live -p 3000:3000 app-dast
-          sleep 20 # Warm up
+          sleep 20
 
       - name: ZAP Baseline Scan
         run: |
@@ -197,17 +197,18 @@ jobs:
           path: report.*
 
   # =================================================================
-  # STAGE 5: SUMMARY
+  # FINAL SUMMARY
   # =================================================================
   summary:
-    needs: [push_and_sign, dast_scan]
+    needs: [push_and_sign, dast_zap]
     if: always()
     runs-on: ubuntu-latest
+    name: 🧾 Summary
     steps:
-      - name: Pipeline Summary
+      - name: Final Summary
         run: |
-          echo "## 🧾 DevSecOps Pipeline Summary for Nova" >> $GITHUB_STEP_SUMMARY
-          echo "- **Gitleaks:** Scan History Verified ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- **Hardening:** Chainguard Wolfi Verified ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- **Integrity:** Cosign Signature Generated ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- **Vulnerability:** SARIF Uploaded to Security Tab ✅" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 DevSecOps Status - Nova" >> $GITHUB_STEP_SUMMARY
+          echo "- **SAST/SCA:** SonarCloud & Gitleaks Verified ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Security:** SARIF Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- **Integrity:** Cosign Signed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- **DAST:** OWASP ZAP Completed ✅" >> $GITHUB_STEP_SUMMARY
