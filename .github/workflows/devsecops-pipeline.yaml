@@ -198,7 +198,7 @@ jobs:
             -J report.json || true
 
       - name: Convert ZAP JSON to SARIF
-        uses: Snyk/zap-to-sarif@master
+        uses: Snyk/zap-to-sarif@632057279361732e4d2621415e98547c6172551a
         with:
           zap-json: report.json
           sarif-file: zap-results.sarif
