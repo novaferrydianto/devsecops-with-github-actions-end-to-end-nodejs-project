@@ -89,7 +89,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Snyk Scan
-        uses: snyk/actions/node@632057279361732e4d2621415e98547c6172551a
+        uses: snyk/actions/node@v1
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -198,7 +198,7 @@ jobs:
             -J report.json || true
 
       - name: Convert ZAP JSON to SARIF
-        uses: Snyk/zap-to-sarif@632057279361732e4d2621415e98547c6172551a
+        uses: snyk/actions/zap-to-sarif@v1
         with:
           zap-json: report.json
           sarif-file: zap-results.sarif
