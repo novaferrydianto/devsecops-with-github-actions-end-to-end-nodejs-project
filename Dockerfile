@@ -1,54 +1,43 @@
 ######################
 # STAGE 1: BUILDER
 ######################
-# Menggunakan Bookworm-slim agar konsisten dengan Debian di Distroless
-FROM node:24-bookworm-slim AS builder
+# Chainguard menyediakan image dev untuk kebutuhan kompilasi/build
+FROM cgr.dev/chainguard/node:24-dev AS builder
 
-# Metadata untuk audit supply chain
 LABEL stage=builder
 LABEL maintainer="Nova Ferry Dianto"
 
-# Setting DOCKERFILE_DATE forces a build cache refresh for the package upgrades
-ENV DOCKERFILE_DATE=2026-04-06
-
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV NODE_ENV=production
-
+# Di Chainguard, user default adalah 'node', namun kita gunakan environment standard
 WORKDIR /app
 
-# Optimasi Layer Cache & Security Patch: Copy package files dan upgrade OS package dasar
+# Copy package files
 COPY package*.json ./
-# Upgrade system library untuk mitigasi kerentanan (misal libc6) pada tahap builder
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-# Install hanya dependensi produksi secara bersih
+# Install dependensi (Chainguard node-dev sudah memiliki npm)
 RUN npm ci --only=production
 
-# Copy sisa source code
+# Copy source code
 COPY . .
 
 ######################
-# STAGE 2: RUNTIME (HARDENED)
+# STAGE 2: RUNTIME (ZERO CVE)
 ######################
-# Menggunakan tag dinamis nonroot (tanpa hardcoded SHA) agar selalu mendapatkan security patch terbaru (seperti libc6 dsb)
-FROM gcr.io/distroless/nodejs24-debian12:nonroot AS runtime
+# Menggunakan static runtime image (Tanpa Shell, Tanpa Package Manager)
+FROM cgr.dev/chainguard/node:24 AS runtime
 
 # Metadata Image
 LABEL org.opencontainers.image.source="https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project"
-LABEL security.gate.java="21"
-LABEL node.runtime.version="24"
+LABEL security.provider="Chainguard"
 
 WORKDIR /app
 
-# Copy artifact dari builder dengan izin nonroot
-COPY --chown=nonroot:nonroot --chmod=0555 --from=builder /app /app
+# Copy artifact dari builder
+# Chainguard secara default berjalan sebagai user 'node' (UID 65532)
+COPY --from=builder --chown=node:node /app /app
 
 # Ekspos port aplikasi
 EXPOSE 3000
 
-# Jalankan sebagai user non-privilese (sudah bawaan distroless nonroot)
-USER nonroot
-
-# Jalankan aplikasi (Distroless Nodejs langsung mengeksekusi file JS)
+# Jalankan aplikasi
+# Chainguard node image entrypoint secara default adalah 'node'
 CMD ["app.js"]
