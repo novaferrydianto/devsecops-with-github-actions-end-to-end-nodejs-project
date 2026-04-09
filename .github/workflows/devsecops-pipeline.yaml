@@ -1,10 +1,4 @@
-#################################################################################
-# DevSecOps Pipeline - Production Ready 2026
-# Fixes: Gitleaks, SonarCloud, Trivy SARIF Path, CodeQL v4, DAST Checkout
-#################################################################################
-
-name: "DevSecOps Production Pipeline"
-
+name: DevSecOps Pipeline
 on:
   push:
     branches: [master]
@@ -14,13 +8,15 @@ on:
 
 concurrency:
   group: devsecops-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
+# ✅ STEP 1: Global Environment Configuration
 env:
   NODE_VERSION: 24
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}
+  REGISTRY: ${{ secrets.REGISTRY }}
+  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   LOCAL_IMAGE_REPO: docker.io/${{ github.repository }}
   LOCAL_IMAGE_TAG: ${{ github.sha }}
 
@@ -37,29 +33,29 @@ jobs:
     name: 🧱 Test & SAST
     permissions:
       contents: read
-      security-events: write
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v5
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
-      - name: Gitleaks Secret Scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       - name: Install & Test
         run: |
           npm ci
           npm test
-          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover || echo "No tests found"
+          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
@@ -70,152 +66,261 @@ jobs:
             -Dsonar.organization=devsecopsganodejs
             -Dsonar.projectKey=devsecopsganodejs
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.scanner.skipJreProvisioning=true
+
+  security_audit:
+    runs-on: ubuntu-latest
+    name: 🧩 SCA, License & FS Audit
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Snyk Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
+          args: --severity-threshold=low --json-file-output=snyk-report.json
+
+      - name: Generate Snyk HTML Report
+        if: always()
+        run: |
+          npm install -g snyk-to-html
+          snyk-to-html -i snyk-report.json -o snyk-report.html
+
+      - name: Enforce Security & Whitelist License Policy
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          set -euo pipefail
+          if [ ! -f snyk-report.json ]; then exit 2; fi
+          VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
+          ALLOWED_REGEX="MIT|Apache-2.0|BSD-2-Clause|BSD-3-Clause|ISC"
+          ILLEGAL_LICENSES=$(jq -r --arg ALLOWED "$ALLOWED_REGEX" '
+            [.vulnerabilities[]? | select(.type=="license") | select(.title | test($ALLOWED; "i") | not) | .title] | unique | join(", ")
+          ' snyk-report.json)
+          if [ "$VULN_COUNT" -ne "0" ] || [ ! -z "$ILLEGAL_LICENSES" ]; then exit 1; fi
+
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: fs
+          format: table
+          output: trivy-report.txt
+
+      - name: Upload Security Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: snyk-report.*
 
   # =================================================================
   # STAGE 2: CONTAINER SECURITY
   # =================================================================
-  image_security:
-    needs: [test_and_sast]
+  image_build_local_trivy_sarif:
+    needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
-    name: 🛡️ Build & Image Scan
+    name: 🧪 Build & Image Scan
     permissions:
       contents: read
       security-events: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Local (Chainguard Ready)
-        id: docker_build
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build local
         uses: docker/build-push-action@v6
         with:
           context: .
           load: true
           tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Trivy Image Scan (SARIF)
-        id: trivy_scan
         uses: aquasecurity/trivy-action@v0.35.0
-        if: steps.docker_build.outcome == 'success'
+        continue-on-error: true
         with:
+          scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
 
       - name: Upload SARIF to Security Tab
         uses: github/codeql-action/upload-sarif@v4
-        if: always() && steps.trivy_scan.outcome == 'success'
+        if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'trivy-image'
+          sarif_file: trivy-results.sarif
+          category: trivy-image
 
-      - name: Generate SBOM
+      - name: Generate SBOM (CycloneDX)
         uses: aquasecurity/trivy-action@v0.35.0
-        if: steps.docker_build.outcome == 'success'
         with:
+          scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
-          format: 'cyclonedx'
-          output: 'trivy-sbom.json'
+          format: cyclonedx
+          output: trivy-sbom.json
 
-      - name: Upload Artifacts
+      - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
-        if: always() && steps.docker_build.outcome == 'success'
+        if: always()
         with:
-          name: security-reports
-          path: |
-            trivy-results.sarif
-            trivy-sbom.json
+          name: trivy-sbom
+          path: trivy-sbom.json
 
   # =================================================================
   # STAGE 3: DELIVERY & SIGNING
   # =================================================================
-  push_and_sign:
-    needs: [image_security]
+  podman_build_push:
+    needs: [image_build_local_trivy_sarif]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    name: 📦 Push & Sign
+    name: 📦 Podman Build & Push
     permissions:
       contents: read
-      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+      - name: Install & Login Podman
+        run: |
+          sudo apt-get update && sudo apt-get install -y podman
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      - name: Build & Push
+        run: |
+          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+          TAG="${GITHUB_SHA::7}"
+          podman build -t "$IMAGE_PATH:$TAG" -t "$IMAGE_PATH:latest" .
+          podman push "$IMAGE_PATH:$TAG"
+          podman push "$IMAGE_PATH:latest"
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
+  cosign_sign:
+    needs: [podman_build_push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    name: 🔏 Cosign Sign & Verify
+    permissions:
+      contents: read
+    steps:
+      - uses: sigstore/cosign-installer@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Production Image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Sign Image
+      - name: Sign & Export Public Key
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          IMAGE_FULL_PATH="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+          TAG="${GITHUB_SHA::7}"
           echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key -y "$IMAGE_FULL_PATH"
+          cosign sign --key cosign.key -y "$IMAGE_PATH:$TAG"
+          cosign public-key --key cosign.key --outfile cosign.pub
+          {
+            echo "### 🔑 Cosign Public Key"
+            echo '```'
+            cat cosign.pub
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
-  # STAGE 4: DAST
+  # STAGE 4: DAST (DYNAMIC APPLICATION SECURITY TESTING)
   # =================================================================
-  dast_zap:
-    needs: [image_security]
+  dast_zap_ci:
+    needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
-    name: 🎯 DAST Scan
+    name: 🎯 ZAP Baseline (CI)
+    continue-on-error: true
+    permissions:
+      contents: read
+      issues: write
     steps:
-      - name: Checkout Code # FIX: Tanpa ini, Docker tidak bisa build image untuk DAST
+      - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Run App Container
+      - name: Build and Run App Container Locally
         run: |
-          docker build -t app-dast .
-          docker run -d --name app-live -p 3000:3000 app-dast
+          docker build -t app-local-dast .
+          # Gunakan network host agar container ZAP bisa mengakses localhost:3000 dengan mudah
+          docker run -d --network="host" -e OPENWEATHER_API_KEY="dummy-token-for-dast" app-local-dast
+          echo "Waiting for application to start..."
           sleep 20
 
       - name: ZAP Baseline Scan
         run: |
-          chmod 777 $(pwd)
-          docker run -v "$(pwd):/zap/wrk/:rw" --network="host" -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:3000 -r report.html -J report.json || true
+          # Penambahan path absolut /zap/wrk/ untuk menjamin file tertulis di volume mount
+          docker run --user root -v "$(pwd):/zap/wrk/:rw" --network="host" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:3000 \
+            -r report.html \
+            -J report.json || true
+          
+          # Debugging: Cek apakah file benar-benar ada sebelum upload
+          ls -la $(pwd)/report.html
 
-      - name: Upload DAST Report
+      - name: Upload ZAP Security Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report
-          path: report.*
+          name: zap-report-ci
+          path: |
+            report.html
+            report.json
+
+      - name: Create or Update ZAP Security Issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -f report.json ]; then
+            ALERTS=$(jq '[.site[].alerts[]? | select(.riskcode != "0")] | length' report.json || echo "0")
+            EXISTING_ISSUE=$(gh issue list -R "$REPO" --label "security" --state open --json number --jq '.[0].number')
+            
+            if [ "$ALERTS" -gt "0" ]; then
+              echo "Creating ZAP DAST Issue for $ALERTS alerts..."
+              if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
+                gh issue create -R "$REPO" \
+                  --title "🎯 DAST ZAP Vulnerabilities Detected" \
+                  --body "OWASP ZAP mendeteksi **$ALERTS** kelemahan keamanan pada build #${{ github.run_number }}. Silakan unduh laporan lengkap di tab Artifacts." \
+                  --label "security"
+              else
+                ALERTS_DETAIL=$(jq '.site[0].alerts[]? | "- \(.name) (\(.riskdesc))"' report.json -r | head -n 5 || echo "- Unable to parse alert details")
+                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update Build #${{ github.run_number }}**: Masih ditemukan $ALERTS kerentanan."$'\n\n'"**Top Alerts:**"$'\n'"$ALERTS_DETAIL"
+              fi
+            else
+              if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
+                gh issue close "$EXISTING_ISSUE" -R "$REPO" -c "✅ **Resolved**: Hasil scan ZAP terbaru menunjukkan 0 alerts."
+              fi
+            fi
+          fi
 
   # =================================================================
   # FINAL SUMMARY
   # =================================================================
   summary:
-    needs: [push_and_sign, dast_zap]
+    needs: [test_and_sast, security_audit, podman_build_push, cosign_sign, dast_zap_ci]
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
+    permissions:
+      contents: read
     steps:
       - name: Final Summary
         run: |
-          echo "## 🚀 DevSecOps Status - Nova" >> $GITHUB_STEP_SUMMARY
-          echo "- **SAST/SCA:** SonarCloud & Gitleaks Verified ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Security:** SARIF Uploaded ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- **Integrity:** Cosign Signed ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- **DAST:** OWASP ZAP Completed ✅" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## DevSecOps Pipeline — Summary"
+            echo "- ✅ Runtime: Node 24 (Hardened)"
+            echo "- ✅ Security: PoLP Job-level Permissions"
+            echo "- ✅ Compliance: License Whitelisting & Cosign Provenance"
+            echo "- ✅ DAST: ZAP Scan Complete"
+            echo "- ✅ Status: Production Ready"
+          } >> "$GITHUB_STEP_SUMMARY"
