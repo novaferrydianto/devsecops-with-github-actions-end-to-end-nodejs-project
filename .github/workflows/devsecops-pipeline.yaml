@@ -188,4 +188,13 @@ jobs:
     runs-on: ubuntu-latest
     name: 🧾 Summary
     steps:
-      - run: echo "### DevSecOps Pipeline Complete 🚀" >> "$GITHUB_STEP_SUMMARY"
+      - name: Final Summary
+        run: |
+          # ✅ Perbaikan SC2129: Menggunakan grouping redirection
+          {
+            echo "## DevSecOps Pipeline Complete 🚀"
+            echo "- SAST: SonarCloud Scan ✅"
+            echo "- SCA: Snyk & Gitleaks ✅"
+            echo "- DAST: ZAP Baseline ✅"
+            echo "- Build Info: Node ${{ env.NODE_VERSION }} | Runner Node 24"
+          } >> "$GITHUB_STEP_SUMMARY"
