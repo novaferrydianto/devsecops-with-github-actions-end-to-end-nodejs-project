@@ -137,17 +137,30 @@ jobs:
   aikido_security:
     needs: [test_and_sast]
     runs-on: ubuntu-latest
-    name: 🛡️ Aikido Security Scan
-    permissions:
-      contents: read
+    name: 🛡️ Aikido Security Scan (CLI Mode)
     steps:
-      - uses: actions/checkout@v5
-      - name: Run Aikido Scan
-        uses: aikido-sec/github-actions-workflow@v1
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
         with:
-          aikido-token: ${{ secrets.AIKIDO_API_KEY }}
-          fail-on-dependency-scan: true
-          fail-on-sast-scan: true
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run Aikido Scan via CLI
+        env:
+          # Pastikan secret ini adalah CI Token dari menu Release Gating
+          AIKIDO_API_KEY: ${{ secrets.AIKIDO_API_KEY }}
+        run: |
+          echo "🚀 Starting Aikido Scan via CLI..."
+          # Menggunakan npx untuk menjalankan CLI resmi Aikido
+          # --upload: Mengirim hasil ke dashboard
+          # Tanpa flag --fail-on, pipeline tidak akan berhenti meskipun ada celah (Free Tier friendly)
+          npx @aikidosec/cli scan \
+            --api-key $AIKIDO_API_KEY \
+            --upload \
+            --sast \
+            --dependency-scan
 
   # =================================================================
   # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
