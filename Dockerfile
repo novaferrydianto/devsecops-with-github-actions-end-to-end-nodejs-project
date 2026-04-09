@@ -24,16 +24,17 @@ FROM cgr.dev/chainguard/node:latest
 
 WORKDIR /app
 
-# ✅ Tetap gunakan chown saat menyalin dari stage builder
+# ✅ Salin file dengan user node
 COPY --chown=node:node --from=builder /app/node_modules ./node_modules
-COPY --chown=node:node --from=builder /app/app.js ./
-COPY --chown=node:node --from=builder /app/fetch-weather.js ./
-COPY --chown=node:node --from=builder /app/prepared-for-the-weather.js ./
+COPY --chown=node:node --from=builder /app/*.js ./
 COPY --chown=node:node --from=builder /app/package.json ./
 
+# ✅ FIX UNTUK COPILOT: Hilangkan izin tulis (Write) untuk user node
+# Ini memastikan file tidak bisa diubah jika container disusupi
+USER root
+RUN chmod -R 550 /app && chmod -R 440 /app/package.json
+USER node
+
 ENV NODE_ENV=production
-ENV AIKIDO_BLOCK=true
-
 EXPOSE 3000
-
 CMD ["app.js"]
