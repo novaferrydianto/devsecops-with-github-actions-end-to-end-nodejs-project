@@ -1,6 +1,6 @@
 #################################################################################
 # DevSecOps Pipeline - Production Ready 2026
-# Fixes: Gitleaks (Full History), SonarCloud (Keys), Trivy (SARIF Path)
+# Fixes: Gitleaks, SonarCloud, Trivy SARIF Path, CodeQL v4, DAST Checkout
 #################################################################################
 
 name: "DevSecOps Production Pipeline"
@@ -42,7 +42,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v5
         with:
-          # FIX: Mengambil full history agar Gitleaks tidak error 'fatal: ambiguous argument'
           fetch-depth: 0 
 
       - name: Gitleaks Secret Scan
@@ -90,16 +89,19 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Local (Chainguard Ready)
+        id: docker_build
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true # FIX: Meload ke daemon lokal agar Trivy bisa menemukan image
+          load: true
           tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Trivy Image Scan (SARIF)
+        id: trivy_scan
         uses: aquasecurity/trivy-action@v0.35.0
+        if: steps.docker_build.outcome == 'success'
         with:
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           format: 'sarif'
@@ -108,14 +110,15 @@ jobs:
           exit-code: '0'
 
       - name: Upload SARIF to Security Tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always() # FIX: Tetap upload meskipun Trivy mendeteksi vulnerability
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && steps.trivy_scan.outcome == 'success'
         with:
           sarif_file: 'trivy-results.sarif'
           category: 'trivy-image'
 
       - name: Generate SBOM
         uses: aquasecurity/trivy-action@v0.35.0
+        if: steps.docker_build.outcome == 'success'
         with:
           image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
           format: 'cyclonedx'
@@ -123,6 +126,7 @@ jobs:
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
+        if: always() && steps.docker_build.outcome == 'success'
         with:
           name: security-reports
           path: |
@@ -179,6 +183,9 @@ jobs:
     runs-on: ubuntu-latest
     name: 🎯 DAST Scan
     steps:
+      - name: Checkout Code # FIX: Tanpa ini, Docker tidak bisa build image untuk DAST
+        uses: actions/checkout@v5
+
       - name: Run App Container
         run: |
           docker build -t app-dast .
