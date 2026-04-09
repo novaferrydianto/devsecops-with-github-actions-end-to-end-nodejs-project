@@ -4,10 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# ✅ PoLP: Berikan izin tulis HANYA untuk Pull Requests agar bot bisa klik 'Approve' dan 'Merge'
+# ✅ REMEDIATION: Global Permissions Lockdown (StepSecurity Scorecard FIX)
+# Ini akan membuat skor Token-Permissions menjadi 10/10
 permissions:
-  pull-requests: write
-  contents: write
+  contents: read
 
 jobs:
   dependabot-auto-merge:
@@ -15,6 +15,12 @@ jobs:
     name: 🚦 Smart Auto-Merge
     # HANYA eksekusi jika pembuat PR adalah bot resmi Dependabot
     if: github.actor == 'dependabot[bot]'
+    
+    # ✅ Elevasi izin HANYA pada level job ini
+    permissions:
+      pull-requests: write
+      contents: write
+
     steps:
       - name: Fetch Dependabot Metadata
         id: metadata
@@ -23,7 +29,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Auto-Approve & Enable Auto-Merge for Patches
-        # Logika Inti: Hanya eksekusi jika ini adalah PATCH update (misal 1.2.3 -> 1.2.4)
+        # Logika: Hanya eksekusi jika ini adalah PATCH update (keamanan tinggi)
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: |
           echo "✅ Patch update detected. Approving PR..."
@@ -33,5 +39,4 @@ jobs:
           gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          # GITHUB_TOKEN bawaan cukup untuk operasi ini
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
