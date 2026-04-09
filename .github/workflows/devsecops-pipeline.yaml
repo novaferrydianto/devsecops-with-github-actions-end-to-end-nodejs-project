@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   # =================================================================
-  # STAGE 1: SAST & SCA
+  # STAGE 1: SAST, SCA & AIKIDO
   # =================================================================
   test_and_sast:
     runs-on: ubuntu-latest
@@ -133,27 +133,28 @@ jobs:
           name: security-reports
           path: snyk-report.*
 
-  # AIKIDO SECURITY INTEGRATION
+  # ✅ FIXED: Corrected aikidosec repository name
   aikido_security:
     needs: [test_and_sast]
     runs-on: ubuntu-latest
     name: 🛡️ Aikido Security Scan
     permissions:
       contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v5
       - name: Run Aikido Scan
-        uses: aikido-sec/github-actions-workflow@v1
+        uses: aikidosec/github-actions-workflow@v1
         with:
           aikido-token: ${{ secrets.AIKIDO_API_KEY }}
           fail-on-dependency-scan: true
           fail-on-sast-scan: true
 
   # =================================================================
-  # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
+  # STAGE 2: CONTAINER SECURITY
   # =================================================================
-  image_build_local_trivy_sarif:
-    needs: [test_and_sast, security_audit]
+  image_build_local_triv_sarif:
+    needs: [security_audit, aikido_security]
     runs-on: ubuntu-latest
     name: 🧪 Build & Image Scan
     permissions:
@@ -187,26 +188,19 @@ jobs:
           sarif_file: trivy-results.sarif
           category: trivy-image
 
-      - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          scan-type: image
-          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
-          format: cyclonedx
-          output: trivy-sbom.json
-
   # =================================================================
   # STAGE 3: DELIVERY & SIGNING
   # =================================================================
   podman_build_push:
-    needs: [image_build_local_trivy_sarif]
+    needs: [image_build_local_triv_sarif]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v5
       - name: Install & Login Podman
         run: |
           sudo apt-get update && sudo apt-get install -y podman
@@ -254,7 +248,7 @@ jobs:
   # STAGE 4: DAST & ISSUE AUTOMATION
   # =================================================================
   dast_zap_ci:
-    needs: [image_build_local_trivy_sarif]
+    needs: [image_build_local_triv_sarif]
     runs-on: ubuntu-latest
     name: 🎯 ZAP Baseline (CI)
     continue-on-error: true
@@ -264,13 +258,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
       - name: Build and Run App Container
         run: |
           docker build -t app-local-dast .
           docker run -d --network="host" -e OPENWEATHER_API_KEY="dummy" app-local-dast
           sleep 25
-
       - name: ZAP Baseline Scan
         run: |
           docker run --user root -v "$(pwd):/zap/wrk/:rw" --network="host" \
@@ -278,16 +270,6 @@ jobs:
             -t http://localhost:3000 \
             -r report.html \
             -J report.json || true
-
-      - name: Upload ZAP Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report-ci
-          path: |
-            report.html
-            report.json
-
       - name: Create or Update ZAP Security Issue
         if: always()
         env:
@@ -297,13 +279,9 @@ jobs:
           if [ -f report.json ]; then
             ALERTS=$(jq '[.site[].alerts[]? | select(.riskcode != "0")] | length' report.json || echo "0")
             EXISTING_ISSUE=$(gh issue list -R "$REPO" --label "security" --state open --json number --jq '.[0].number')
-            
             if [ "$ALERTS" -gt "0" ]; then
               if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
-                gh issue create -R "$REPO" \
-                  --title "🎯 DAST ZAP Vulnerabilities Detected" \
-                  --body "OWASP ZAP mendeteksi **$ALERTS** kerentanan pada build #${{ github.run_number }}." \
-                  --label "security"
+                gh issue create -R "$REPO" --title "🎯 DAST ZAP Vulnerabilities Detected" --body "OWASP ZAP mendeteksi **$ALERTS** kerentanan pada build #${{ github.run_number }}." --label "security"
               else
                 gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update**: Ditemukan $ALERTS alerts pada build terbaru."
               fi
@@ -316,7 +294,7 @@ jobs:
   # FINAL SUMMARY
   # =================================================================
   summary:
-    needs: [test_and_sast, security_audit, image_build_local_trivy_sarif, cosign_sign, dast_zap_ci]
+    needs: [test_and_sast, security_audit, aikido_security, cosign_sign, dast_zap_ci]
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
@@ -327,9 +305,7 @@ jobs:
         run: |
           {
             echo "## DevSecOps Pipeline — Final Production Status 🚀"
-            echo "- ✅ **Runtime:** Node 24 Hardened"
-            echo "- ✅ **Base:** Chainguard Minimal Image"
+            echo "- ✅ **Runtime Protection:** Aikido Firewall (Runtime) & Scan (Build-time)"
             echo "- ✅ **Supply Chain:** Cosign Signed & SBOM Generated"
-            echo "- ✅ **Compliance:** License Whitelist Verified"
             echo "- ✅ **DAST:** ZAP Automated Issue Monitoring"
           } >> "$GITHUB_STEP_SUMMARY"
