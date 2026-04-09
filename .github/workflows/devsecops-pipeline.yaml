@@ -10,7 +10,7 @@ concurrency:
   group: devsecops-${{ github.ref }}
   cancel-in-progress: false
 
-# ✅ STEP 1: Global Environment Configuration
+# ✅ Global Config
 env:
   NODE_VERSION: 24
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     name: 🧱 Test & SAST
     permissions:
-      contents: read
+      contents: read # StepSecurity: Only read code
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -126,7 +126,7 @@ jobs:
           path: snyk-report.*
 
   # =================================================================
-  # STAGE 2: CONTAINER SECURITY
+  # STAGE 2: CONTAINER SECURITY (COMPATIBLE WITH CHAINGUARD)
   # =================================================================
   image_build_local_trivy_sarif:
     needs: [test_and_sast, security_audit]
@@ -134,10 +134,11 @@ jobs:
     name: 🧪 Build & Image Scan
     permissions:
       contents: read
-      security-events: write
+      security-events: write # Required for uploading SARIF to Security tab
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
+      
       - name: Build local
         uses: docker/build-push-action@v6
         with:
@@ -170,13 +171,6 @@ jobs:
           format: cyclonedx
           output: trivy-sbom.json
 
-      - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: trivy-sbom
-          path: trivy-sbom.json
-
   # =================================================================
   # STAGE 3: DELIVERY & SIGNING
   # =================================================================
@@ -208,6 +202,7 @@ jobs:
     name: 🔏 Cosign Sign & Verify
     permissions:
       contents: read
+      id-token: write # StepSecurity: Required for Keyless signing (if used)
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: docker/login-action@v3
@@ -241,29 +236,28 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
-      issues: write
+      issues: write # Required for GitHub Issue integration
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Build and Run App Container Locally
+      - name: Build and Run App Container (Chainguard Ready)
         run: |
           docker build -t app-local-dast .
-          # Gunakan network host agar container ZAP bisa mengakses localhost:3000 dengan mudah
+          # Gunakan --network="host" agar container ZAP (Non-Chainguard) bisa scan app Chainguard
           docker run -d --network="host" -e OPENWEATHER_API_KEY="dummy-token-for-dast" app-local-dast
-          echo "Waiting for application to start..."
-          sleep 20
+          echo "Waiting for Chainguard container to be ready..."
+          sleep 25
 
       - name: ZAP Baseline Scan
         run: |
-          # Penambahan path absolut /zap/wrk/ untuk menjamin file tertulis di volume mount
+          # Perbaikan path: Menulis ke /zap/wrk/ agar terbaca runner
           docker run --user root -v "$(pwd):/zap/wrk/:rw" --network="host" \
             ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
             -t http://localhost:3000 \
             -r report.html \
             -J report.json || true
           
-          # Debugging: Cek apakah file benar-benar ada sebelum upload
           ls -la $(pwd)/report.html
 
       - name: Upload ZAP Security Report
@@ -286,20 +280,16 @@ jobs:
             EXISTING_ISSUE=$(gh issue list -R "$REPO" --label "security" --state open --json number --jq '.[0].number')
             
             if [ "$ALERTS" -gt "0" ]; then
-              echo "Creating ZAP DAST Issue for $ALERTS alerts..."
               if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
                 gh issue create -R "$REPO" \
                   --title "🎯 DAST ZAP Vulnerabilities Detected" \
-                  --body "OWASP ZAP mendeteksi **$ALERTS** kelemahan keamanan pada build #${{ github.run_number }}. Silakan unduh laporan lengkap di tab Artifacts." \
+                  --body "OWASP ZAP mendeteksi **$ALERTS** kerentanan pada build #${{ github.run_number }}." \
                   --label "security"
               else
-                ALERTS_DETAIL=$(jq '.site[0].alerts[]? | "- \(.name) (\(.riskdesc))"' report.json -r | head -n 5 || echo "- Unable to parse alert details")
-                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update Build #${{ github.run_number }}**: Masih ditemukan $ALERTS kerentanan."$'\n\n'"**Top Alerts:**"$'\n'"$ALERTS_DETAIL"
+                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update**: Ditemukan $ALERTS alerts pada build terbaru."
               fi
-            else
-              if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
-                gh issue close "$EXISTING_ISSUE" -R "$REPO" -c "✅ **Resolved**: Hasil scan ZAP terbaru menunjukkan 0 alerts."
-              fi
+            elif [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
+              gh issue close "$EXISTING_ISSUE" -R "$REPO" -c "✅ Resolved pada build #${{ github.run_number }}."
             fi
           fi
 
@@ -317,10 +307,9 @@ jobs:
       - name: Final Summary
         run: |
           {
-            echo "## DevSecOps Pipeline — Summary"
-            echo "- ✅ Runtime: Node 24 (Hardened)"
-            echo "- ✅ Security: PoLP Job-level Permissions"
-            echo "- ✅ Compliance: License Whitelisting & Cosign Provenance"
-            echo "- ✅ DAST: ZAP Scan Complete"
-            echo "- ✅ Status: Production Ready"
+            echo "## DevSecOps Pipeline — StepSecurity Hardened"
+            echo "- ✅ Runtime: Node 24"
+            echo "- ✅ Minimal Base: Chainguard"
+            echo "- ✅ RBAC: Job-level Least Privilege"
+            echo "- ✅ Provenance: Signed by Cosign"
           } >> "$GITHUB_STEP_SUMMARY"
