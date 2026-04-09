@@ -1,47 +1,44 @@
-######################
-# STAGE 1: BUILDER
-######################
-# Gunakan 'latest-dev' untuk kompatibilitas registry publik Chainguard
+# =================================================================
+# STAGE 1: Build & Dependencies
+# =================================================================
 FROM cgr.dev/chainguard/node:latest-dev AS builder
 
-LABEL stage=builder
-LABEL maintainer="Nova Ferry Dianto"
-
-# Di Chainguard, user default adalah 'node'
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# ✅ Layer Caching: Hanya install jika package.json berubah
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
 
-# Install dependensi (Chainguard node-dev sudah memiliki npm)
-# Gunakan ci untuk reproduksibilitas build
-RUN npm ci
-
-# Copy source code
+# Copy source code dan jalankan build/test jika diperlukan
 COPY . .
+# RUN npm test # Opsional: Jalankan test di dalam container build
 
-######################
-# STAGE 2: RUNTIME (ZERO CVE)
-######################
-# Menggunakan static runtime image (Tanpa Shell, Tanpa Package Manager)
-FROM cgr.dev/chainguard/node:latest AS runtime
+# Hapus devDependencies untuk production
+RUN npm prune --production
 
-# Metadata Image
+# =================================================================
+# STAGE 2: Hardened Runtime
+# =================================================================
+FROM cgr.dev/chainguard/node:latest
+
+LABEL maintainer="Nova Ferrydianto <novaferrydianto@gmail.com>"
 LABEL org.opencontainers.image.source="https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project"
-LABEL security.provider="Chainguard"
 
 WORKDIR /app
 
-# Copy artifact dari builder
-# Pastikan ownership berada di tangan user 'node' (UID 65532)
-COPY --from=builder --chown=node:node /app /app
+# Copy hanya yang dibutuhkan dari builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/app.js ./
+COPY --from=builder /app/fetch-weather.js ./
+COPY --from=builder /app/prepared-for-the-weather.js ./
+COPY --from=builder /app/package.json ./
 
-# Best Practice DevSecOps: Pastikan container berjalan sebagai non-root
-USER node
+# Environment Variables
+ENV NODE_ENV=production
+ENV AIKIDO_BLOCK=true
 
-# Ekspos port aplikasi
+# Port aplikasi
 EXPOSE 3000
 
-# Jalankan aplikasi
-# Pastikan app.js berada di root direktori /app
+# Jalankan dengan Node langsung (Chainguard menggunakan user 'node' secara default)
 CMD ["app.js"]
