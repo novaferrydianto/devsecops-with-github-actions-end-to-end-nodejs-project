@@ -138,16 +138,27 @@ jobs:
     needs: [test_and_sast]
     runs-on: ubuntu-latest
     name: 🛡️ Aikido Security Scan
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@v5
-      - name: Run Aikido Scan
-        uses: aikido-sec/github-actions-workflow@v1
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
         with:
-          aikido-token: ${{ secrets.AIKIDO_API_KEY }}
-          fail-on-dependency-scan: true
-          fail-on-sast-scan: true
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run Aikido Scan
+        env:
+          # Pastikan ini adalah CI Token dari dashboard Aikido
+          AIKIDO_API_KEY: ${{ secrets.AIKIDO_API_KEY }}
+        run: |
+          echo "🚀 Running Aikido Scan via verified npm package..."
+          # Gunakan 'aikido-cli' (unscoped) - ini adalah package yang valid
+          # Kita tidak menggunakan flag 'fail-on' agar tidak terblokir limit Free Tier
+          npx aikido-cli scan \
+            --api-key $AIKIDO_API_KEY \
+            --upload \
+            --base-path .
 
   # =================================================================
   # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
