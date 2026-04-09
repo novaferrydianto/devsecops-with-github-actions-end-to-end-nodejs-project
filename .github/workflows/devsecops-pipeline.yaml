@@ -163,12 +163,14 @@ jobs:
           docker run --user root -v "$(pwd):/zap/wrk/:rw" --network="host" \
             ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
             -t http://localhost:3000 -J report.json || true
+
+      # ✅ FIX: Menggunakan action yang stabil untuk konversi SARIF
       - name: Convert & Upload SARIF
-        # ✅ FIX: Using @master for correct action.yml metadata path
-        uses: snyk/actions/zap-to-sarif@master
+        uses: sachin-kurkute/zap-to-sarif@main
         with:
-          zap-json: report.json
-          sarif-file: zap-results.sarif
+          input_file: 'report.json'
+          output_file: 'zap-results.sarif'
+
       - name: Upload SARIF to GitHub
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -203,7 +205,7 @@ jobs:
     steps:
       - name: Generate Summary
         run: |
-          # ✅ FIX SC2129: Grouping redirects into one block
+          # ✅ FIX SC2129: Grouping redirects (Clean and Optimized)
           {
             echo "### DevSecOps Pipeline Complete 🚀"
             echo "- **SAST:** SonarCloud Scan ✅"
