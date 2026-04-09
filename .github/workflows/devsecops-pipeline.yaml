@@ -137,17 +137,26 @@ jobs:
   aikido_security:
     needs: [test_and_sast]
     runs-on: ubuntu-latest
-    name: 🛡️ Aikido Security Scan
-    permissions:
-      contents: read
+    name: 🛡️ Aikido Security Scan (Robust CLI)
     steps:
-      - uses: actions/checkout@v5
-      - name: Run Aikido Scan
-        uses: aikido-sec/github-actions-workflow@v1
-        with:
-          aikido-token: ${{ secrets.AIKIDO_API_KEY }}
-          fail-on-dependency-scan: true
-          fail-on-sast-scan: true
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install & Run Aikido CLI
+        env:
+          AIKIDO_API_KEY: ${{ secrets.AIKIDO_API_KEY }}
+        run: |
+          echo "🚀 Downloading Aikido CLI..."
+          # Mengunduh official installation script dan memasang binary di ./bin
+          curl -sSfL https://raw.githubusercontent.com/aikidosec/aikido-cli/main/install.sh | sh
+          
+          echo "🔍 Starting Scan..."
+          # Menjalankan binary dari direktori ./bin
+          # --upload: Mengirim data ke app.aikido.dev
+          ./bin/aikido-cli scan \
+            --api-key $AIKIDO_API_KEY \
+            --upload \
+            --base-path .
 
   # =================================================================
   # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
