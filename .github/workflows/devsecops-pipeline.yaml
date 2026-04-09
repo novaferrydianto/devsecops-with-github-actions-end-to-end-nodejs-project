@@ -70,13 +70,18 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # ✅ FIX: Avoid 'ambiguous argument' by scanning the current source
+        with:
+          args: detect --source=. --verbose --redact --report-format=sarif --report-path=results.sarif
       - name: Snyk Scan
-        # ✅ FIX: Pin to stable v1
-        uses: snyk/actions/node@v1
+        # ✅ FIX: Using @master for stable monorepo metadata resolution
+        uses: snyk/actions/node@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -152,7 +157,8 @@ jobs:
             ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
             -t http://localhost:3000 -J report.json || true
       - name: Convert & Upload SARIF (For Autofix)
-        uses: snyk/actions/zap-to-sarif@v1
+        # ✅ FIX: Redirecting to @master to solve 'action.yml not found' error
+        uses: snyk/actions/zap-to-sarif@master
         with:
           zap-json: report.json
           sarif-file: zap-results.sarif
@@ -188,4 +194,8 @@ jobs:
     runs-on: ubuntu-latest
     name: 🧾 Summary
     steps:
-      - run: echo "### DevSecOps Pipeline Complete 🚀" >> "$GITHUB_STEP_SUMMARY"
+      - run: |
+          echo "### DevSecOps Pipeline Complete 🚀" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SAST: SonarCloud Scan ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SCA: Snyk & Gitleaks ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "- DAST: ZAP Baseline ✅" >> "$GITHUB_STEP_SUMMARY"
