@@ -89,7 +89,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Snyk Scan
-        uses: snyk/actions/node@b98d498629f1c3d32102079c277c8979d391f77e
+        uses: snyk/actions/node@632057279361732e4d2621415e98547c6172551a
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
