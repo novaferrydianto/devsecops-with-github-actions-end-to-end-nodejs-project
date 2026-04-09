@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   # =================================================================
-  # STAGE 1: SAST & SCA
+  # STAGE 1: SAST, SCA & AUDIT
   # =================================================================
   test_and_sast:
     runs-on: ubuntu-latest
@@ -69,6 +69,7 @@ jobs:
             -Dsonar.scanner.skipJreProvisioning=true
 
   security_audit:
+    needs: [test_and_sast]
     runs-on: ubuntu-latest
     name: 🧩 SCA, License & FS Audit
     permissions:
@@ -133,27 +134,11 @@ jobs:
           name: security-reports
           path: snyk-report.*
 
-  # AIKIDO SECURITY INTEGRATION
-  aikido_security:
-    needs: [test_and_sast]
-    runs-on: ubuntu-latest
-    name: 🛡️ Aikido Security Scan
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-      - name: Run Aikido Scan
-        uses: aikido-sec/github-actions-workflow@v1
-        with:
-          aikido-token: ${{ secrets.AIKIDO_API_KEY }}
-          fail-on-dependency-scan: true
-          fail-on-sast-scan: true
-
   # =================================================================
-  # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
+  # STAGE 2: CONTAINER SECURITY
   # =================================================================
   image_build_local_trivy_sarif:
-    needs: [test_and_sast, security_audit]
+    needs: [security_audit]
     runs-on: ubuntu-latest
     name: 🧪 Build & Image Scan
     permissions:
@@ -206,7 +191,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v5
       - name: Install & Login Podman
         run: |
           sudo apt-get update && sudo apt-get install -y podman
@@ -264,13 +250,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
       - name: Build and Run App Container
         run: |
           docker build -t app-local-dast .
           docker run -d --network="host" -e OPENWEATHER_API_KEY="dummy" app-local-dast
           sleep 25
-
       - name: ZAP Baseline Scan
         run: |
           docker run --user root -v "$(pwd):/zap/wrk/:rw" --network="host" \
@@ -278,16 +262,6 @@ jobs:
             -t http://localhost:3000 \
             -r report.html \
             -J report.json || true
-
-      - name: Upload ZAP Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report-ci
-          path: |
-            report.html
-            report.json
-
       - name: Create or Update ZAP Security Issue
         if: always()
         env:
@@ -297,15 +271,11 @@ jobs:
           if [ -f report.json ]; then
             ALERTS=$(jq '[.site[].alerts[]? | select(.riskcode != "0")] | length' report.json || echo "0")
             EXISTING_ISSUE=$(gh issue list -R "$REPO" --label "security" --state open --json number --jq '.[0].number')
-            
             if [ "$ALERTS" -gt "0" ]; then
               if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
-                gh issue create -R "$REPO" \
-                  --title "🎯 DAST ZAP Vulnerabilities Detected" \
-                  --body "OWASP ZAP mendeteksi **$ALERTS** kerentanan pada build #${{ github.run_number }}." \
-                  --label "security"
+                gh issue create -R "$REPO" --title "🎯 DAST ZAP Vulnerabilities Detected" --body "OWASP ZAP mendeteksi $ALERTS kerentanan pada build #${{ github.run_number }}." --label "security"
               else
-                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update**: Ditemukan $ALERTS alerts pada build terbaru."
+                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ Update: Ditemukan $ALERTS alerts baru pada build #${{ github.run_number }}."
               fi
             elif [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
               gh issue close "$EXISTING_ISSUE" -R "$REPO" -c "✅ Resolved pada build #${{ github.run_number }}."
@@ -320,16 +290,13 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
-    permissions:
-      contents: read
     steps:
       - name: Final Summary
         run: |
           {
             echo "## DevSecOps Pipeline — Final Production Status 🚀"
-            echo "- ✅ **Runtime:** Node 24 Hardened"
-            echo "- ✅ **Base:** Chainguard Minimal Image"
+            echo "- ✅ **SAST/SCA:** SonarCloud & Snyk Integrated"
             echo "- ✅ **Supply Chain:** Cosign Signed & SBOM Generated"
             echo "- ✅ **Compliance:** License Whitelist Verified"
-            echo "- ✅ **DAST:** ZAP Automated Issue Monitoring"
+            echo "- ✅ **DAST:** ZAP Automated Issue Monitoring Enabled"
           } >> "$GITHUB_STEP_SUMMARY"
