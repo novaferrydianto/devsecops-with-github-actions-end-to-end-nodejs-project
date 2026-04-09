@@ -133,6 +133,22 @@ jobs:
           name: security-reports
           path: snyk-report.*
 
+  # AIKIDO SECURITY INTEGRATION
+  aikido_security:
+    needs: [test_and_sast]
+    runs-on: ubuntu-latest
+    name: 🛡️ Aikido Security Scan
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run Aikido Scan
+        uses: aikido-sec/github-actions-workflow@v1
+        with:
+          aikido-token: ${{ secrets.AIKIDO_API_KEY }}
+          fail-on-dependency-scan: true
+          fail-on-sast-scan: true
+
   # =================================================================
   # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
   # =================================================================
