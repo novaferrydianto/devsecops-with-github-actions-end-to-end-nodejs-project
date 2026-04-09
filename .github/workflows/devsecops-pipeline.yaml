@@ -10,6 +10,9 @@ concurrency:
   group: devsecops-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 # ✅ Global Config
 env:
   NODE_VERSION: 24
