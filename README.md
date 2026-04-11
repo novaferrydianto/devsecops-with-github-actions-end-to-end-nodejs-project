@@ -1,9 +1,11 @@
 # 🔐 DevSecOps-Ready Node.js Weather App
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/badge)](https://securityscorecards.dev/viewer/?uri=github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen.svg)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/policy)
 [![CI/CD Pipeline](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions/workflows/devsecops-pipeline.yaml/badge.svg)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions)
-[![Security: Snyk](https://img.shields.io/badge/Security-Snyk-orange)](https://snyk.io/)
-[![Signed with Cosign](https://img.shields.io/badge/Signed_with-Cosign-purple)](https://sigstore.dev)
-[![Container: Podman](https://img.shields.io/badge/Container-Podman-892CA0)](https://podman.io)
+[![Security: Snyk](https://img.shields.io/badge/Security-Snyk-orange?logo=snyk)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/code-scanning)
+[![Signed with Cosign](https://img.shields.io/badge/Signed_with-Cosign-purple?logo=sigstore)](https://sigstore.dev)
+[![Container: Podman](https://img.shields.io/badge/Container-Podman-892CA0?logo=podman)](https://podman.io)
 
 > **EN:** A modern, secure-by-default Node.js weather application showcasing a complete DevSecOps pipeline.  
 > **ID:** Aplikasi Weather Node.js yang sudah diamankan dengan pipeline DevSecOps end-to-end.

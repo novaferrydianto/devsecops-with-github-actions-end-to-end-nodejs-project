@@ -4,22 +4,25 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily" # Lebih agresif selama masa transisi Node 24
     reviewers:
       - "novaferrydianto"
     assignees:
       - "novaferrydianto"
     open-pull-requests-limit: 10
-    # ✅ Strategi untuk mengupdate SHA tanpa merusak komentar versi
+    # ✅ Penting: Dependabot akan mempertahankan format SHA jika Anda sudah menggunakannya
     versioning-strategy: increase-if-necessary
+    groups:
+      github-actions-updates:
+        patterns:
+          - "*" # Gabungkan semua update actions agar log Node 20 bersih dalam satu PR
     commit-message:
       prefix: "ci"
       include: "scope"
     labels:
       - "dependencies"
       - "security"
-      - "devops"
+      - "github-actions"
 
   # 2. NPM: Grouped for Efficiency
   - package-ecosystem: "npm"
@@ -31,15 +34,13 @@ updates:
       - "novaferrydianto"
     assignees:
       - "novaferrydianto"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "build"
-      include: "scope"
-    # ✅ Menggabungkan banyak update kecil jadi satu PR (anti-noise)
     groups:
       nodejs-dependencies:
         patterns:
           - "*"
+    commit-message:
+      prefix: "build"
+      include: "scope"
     labels:
       - "dependencies"
       - "javascript"
@@ -52,8 +53,8 @@ updates:
       day: "monday"
     reviewers:
       - "novaferrydianto"
-    assignees:
-      - "novaferrydianto"
+    # ✅ Jika Anda menggunakan multi-stage build atau banyak Dockerfile
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
       include: "scope"
