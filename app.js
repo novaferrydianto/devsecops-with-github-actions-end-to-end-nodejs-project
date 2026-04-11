@@ -13,52 +13,53 @@ import * as prepareForWeather from './prepared-for-the-weather.js';
 import commandLineArgs from 'command-line-args';
 import http from 'http';
 
-// 🧩 Parse CLI args
-const options = commandLineArgs([
-  { name: 'location', alias: 'l', type: String, defaultValue: process.env.DEFAULT_LOCATION || 'London' },
-]);
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-const location = options.location;
+// 🚀 Main logic wrapper for testability
+export async function run() {
+  const options = commandLineArgs([
+    { name: 'location', alias: 'l', type: String, defaultValue: process.env.DEFAULT_LOCATION || 'London' },
+  ]);
 
-// 🚀 Main logic
-let server;
+  const location = options.location;
+  let server;
 
-try {
-  const today = await fetchWeather(location);
-  const weatherKit = [
-    { name: 'Umbrella', value: prepareForWeather.doINeed.umbrella(today) },
-    { name: 'Suncream', value: prepareForWeather.doINeed.suncream(today) },
-    { name: 'Jumper', value: prepareForWeather.doINeed.jumper(today) },
-    { name: 'Water', value: prepareForWeather.doINeed.water(today) },
-  ];
+  try {
+    const today = await fetchWeather(location);
+    const weatherKit = [
+      { name: 'Umbrella', value: prepareForWeather.doINeed.umbrella(today) },
+      { name: 'Suncream', value: prepareForWeather.doINeed.suncream(today) },
+      { name: 'Jumper', value: prepareForWeather.doINeed.jumper(today) },
+      { name: 'Water', value: prepareForWeather.doINeed.water(today) },
+    ];
 
-  console.info(`\n🌤️ Weather forecast for ${location}:\n`.cyan); // NOSONAR
-  for (const item of weatherKit) printLine(item.value, item.name);
+    console.info(`\n🌤️ Weather forecast for ${location}:\n`.cyan); // NOSONAR
+    for (const item of weatherKit) printLine(item.value, item.name);
 
-  server = startServer(today);
-} catch (err) {
-  console.error('❌ Failed to fetch weather data:', err?.message || err); // NOSONAR
-  console.info('⚠️ Starting fallback server for health checks & DAST...'); // NOSONAR
-  server = startServer({ error: "API connection failed, fallback mode active" });
+    server = startServer(today, location);
+  } catch (err) {
+    console.error('❌ Failed to fetch weather data:', err?.message || err); // NOSONAR
+    console.info('⚠️ Starting fallback server for health checks & DAST...'); // NOSONAR
+    server = startServer({ error: "API connection failed, fallback mode active" }, location);
+  }
+
+  return server;
 }
 
-// 🛑 SRE: Graceful Shutdown capability for GKE pods
-const shutdown = () => {
+// 🛑 SRE: Graceful Shutdown capability
+export const shutdown = (server) => {
   console.info('\n🛑 Receiving shutdown signal. Shutting down gracefully...'); // NOSONAR
   server.close(() => {
     console.info('✅ Server closed.'); // NOSONAR
     process.exitCode = 0;
   });
   
-  // Force exit if connections take too long to close
   setTimeout(() => {
     console.error('❌ Forcefully shutting down'); // NOSONAR
-    process.exit(1); // NOSONAR: Required for hung connections in GKE
+    process.exit(1); 
   }, 10000).unref();
 };
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
 
 // 🎨 Helpers
 function printLine(required, text) {
@@ -66,7 +67,7 @@ function printLine(required, text) {
 }
 
 // 🌐 Basic HTTP server (for DAST / ZAP)
-function startServer(today) {
+export function startServer(today, location = 'London') {
   const PORT = process.env.PORT || 3000;
 
   const server = http.createServer((req, res) => {
@@ -103,9 +104,12 @@ function startServer(today) {
     res.end('❌ 404 Not Found\n');
   });
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.info(`\n🌦️ App running securely at http://0.0.0.0:${PORT}`.yellow); // NOSONAR
-  });
+  // Only listen if not in test environment or if explicitly called to listen
+  if (process.env.NODE_ENV !== 'test') {
+    server.listen(PORT, '0.0.0.0', () => {
+      console.info(`\n🌦️ App running securely at http://0.0.0.0:${PORT}`.yellow); // NOSONAR
+    });
+  }
 
   return server;
 }
@@ -113,4 +117,13 @@ function startServer(today) {
 function json(res, obj) {
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(obj));
+}
+
+// 🏁 EXECUTION
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) {
+  run().then(server => {
+    process.on('SIGINT', () => shutdown(server));
+    process.on('SIGTERM', () => shutdown(server));
+  });
 }
