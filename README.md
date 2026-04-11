@@ -4,7 +4,7 @@
 [![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen.svg)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/policy)
 [![CI/CD Pipeline](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions/workflows/devsecops-pipeline.yaml/badge.svg)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/actions)
 [![Security: Snyk](https://img.shields.io/badge/Security-Snyk-orange?logo=snyk)](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/code-scanning)
-[![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/en/projects/9876/badge)](https://bestpractices.coreinfrastructure.org/en/projects/9876)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12463/badge)](https://www.bestpractices.dev/projects/12463)
 [![Signed with Cosign](https://img.shields.io/badge/Signed_with-Cosign-purple?logo=sigstore)](https://sigstore.dev)
 [![Container: Podman](https://img.shields.io/badge/Container-Podman-892CA0?logo=podman)](https://podman.io)
 
