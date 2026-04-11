@@ -1,16 +1,16 @@
-FROM node:24-alpine
+FROM node:24-alpine@sha256:01743339035a5c3c11a373cd7c83aeab6ed1457b55da6a69e014a95ac4e4700b
 
 WORKDIR /app
 
 # Upgrade OS packages to mitigate vulnerabilities and install nodemon
 RUN apk upgrade --no-cache && \
-    npm install -g nodemon
+    npm install -g nodemon@3.1.9
 
 # Copy package files first
 COPY package*.json ./
 
 # Install all dependencies including dev deps
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .

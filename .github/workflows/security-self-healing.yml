@@ -27,7 +27,7 @@ jobs:
           echo "Pipeline sukses! Memulai pembersihan tiket keamanan..."
           
           # ✅ FIXED 2: Menyuntikkan -R $REPO untuk bypass pencarian .git lokal
-          ISSUES=$(gh issue list -R $REPO --label "security" --label "high-risk" --json number --jq '.[].number')
+          ISSUES=$(gh issue list -R "$REPO" --label "security" --label "high-risk" --json number --jq '.[].number')
           
           if [ -z "$ISSUES" ]; then
             echo "✅ Tidak ada tiket keamanan yang terbuka. Bagus!"
@@ -39,8 +39,8 @@ jobs:
             echo "Closing issue #$ISSUE_NUMBER..."
             
             # ✅ FIXED 3: Menyuntikkan -R $REPO pada saat memberi komentar
-            gh issue comment $ISSUE_NUMBER -R $REPO --body "✅ **Self-Healing Triggered**: Build #${{ github.event.workflow_run.run_number }} sukses. Sistem mendeteksi bahwa kerentanan ini telah diperbaiki atau dimitigasi. Menutup tiket secara otomatis."
+            gh issue comment "$ISSUE_NUMBER" -R "$REPO" --body "✅ **Self-Healing Triggered**: Build #${{ github.event.workflow_run.run_number }} sukses. Sistem mendeteksi bahwa kerentanan ini telah diperbaiki atau dimitigasi. Menutup tiket secara otomatis."
             
             # ✅ FIXED 4: Menyuntikkan -R $REPO pada saat menutup tiket
-            gh issue close $ISSUE_NUMBER -R $REPO --reason "completed"
+            gh issue close "$ISSUE_NUMBER" -R "$REPO" --reason "completed"
           done
