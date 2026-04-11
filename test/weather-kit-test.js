@@ -31,4 +31,13 @@ describe("Test the weather kit module's basic functionality", function () {
   it("should always return true as water is always required", function () {
     expect(doINeed.water(monday)).equal(true);
   });
+
+  it("should return true for boots if it is snowing or heavily raining", function () {
+    const snowy = weatherData.snowy_cold;
+    const humid = weatherData.extreme_humidity;
+    expect(doINeed.boots(snowy)).to.equal(true); // Snowing
+    expect(doINeed.boots(humid)).to.equal(false); // Hot but no rain/snow
+    expect(doINeed.boots(friday)).to.equal(false); // Light rain (5)
+    expect(doINeed.boots({ rainFall: 15 })).to.equal(true); // Heavy rain
+  });
 });

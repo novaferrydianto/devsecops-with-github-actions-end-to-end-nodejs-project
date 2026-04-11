@@ -89,7 +89,20 @@ pre.prettyprint {
 }
 
 .cline-any { background: rgba(56, 189, 248, 0.1) !important; border-left: 3px solid var(--primary) !important; }
-.cline-no { background: rgba(239, 64, 64, 0.2) !important; border-left: 3px solid var(--danger) !important; }
+.cline-no { background: rgba(239, 68, 68, 0.2) !important; border-left: 3px solid var(--danger) !important; }
+
+/* 🌈 Syntax Highlighting (Prettify Dark Mode) */
+.pln { color: var(--text-main) !important; } /* Plain text */
+.kwd { color: #818cf8 !important; font-weight: bold; } /* Keywords */
+.str { color: #34d399 !important; } /* Strings */
+.com { color: var(--text-muted) !important; font-style: italic; } /* Comments */
+.typ { color: #f472b6 !important; } /* Types */
+.lit { color: #fbbf24 !important; } /* Literals */
+.pun { color: #94a3b8 !important; } /* Punctuation */
+.tag { color: #f87171 !important; } /* HTML tags */
+.atn { color: #fbbf24 !important; } /* Attributes */
+.atv { color: #38bdf8 !important; } /* Attribute values */
+.dec { color: #94a3b8 !important; } /* Declarations */
 
 .footer {
   color: var(--text-muted) !important;

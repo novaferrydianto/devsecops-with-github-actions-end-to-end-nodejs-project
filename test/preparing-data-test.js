@@ -69,4 +69,29 @@ describe("Weather data processing", function () {
 
     await expect(fetchWeather("Tokyo")).to.be.rejectedWith("HTTP error");
   });
+
+  it("should parse snow data correctly from raw Helsinki snapshot", async () => {
+    const rawSnow = await import("../test-data/sample-weather-snow-raw.json", { with: { type: "json" } });
+    fetchStub = sinon.stub(global, "fetch").resolves({
+      ok: true,
+      json: async () => rawSnow.default,
+    });
+
+    const result = await fetchWeather("Helsinki");
+    expect(result.snowFall).to.equal(1.5);
+    expect(result.humidity).to.equal(85);
+  });
+
+  it("should parse extreme humidity from Jakarta snapshot", async () => {
+    const rawHumid = await import("../test-data/sample-weather-humid-raw.json", { with: { type: "json" } });
+    fetchStub = sinon.stub(global, "fetch").resolves({
+      ok: true,
+      json: async () => rawHumid.default,
+    });
+
+    const result = await fetchWeather("Jakarta");
+    expect(result.humidity).to.equal(95);
+    expect(result.rainFall).to.equal(0);
+    expect(result.snowFall).to.equal(0);
+  });
 });
