@@ -1,0 +1,80 @@
+name: 🚀 Production Release & Signing
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger saat tag v1.0.0, v2.1.0, dll didorong
+
+# ✅ PoLP Permissions (Wajib untuk Keyless Signing via OIDC)
+permissions:
+  contents: write # Untuk membuat GitHub Release & mengunggah aset
+  id-token: write # Untuk otentikasi Sigstore/Cosign ke Fulcio
+
+jobs:
+  build_and_release:
+    name: 🏗️ Build & Signed Release
+    runs-on: ubuntu-latest
+    steps:
+      # =============================
+      # 1) SETUP & CHECKOUT
+      # =============================
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      # =============================
+      # 2) GENERATE ARTIFACTS
+      # =============================
+      - name: Generate Checksums
+        run: |
+          echo "### 📄 Generating SHA256 Checksums..."
+          # Menghitung hash untuk file-file utama di root
+          find . -maxdepth 1 -type f -not -path '*/.*' -exec sha256sum {} + > checksums.txt
+          echo "Generated checksums.txt:"
+          cat checksums.txt
+
+      # =============================
+      # 3) SIGNING (KEYLESS)
+      # =============================
+      - name: Sign Checksums with Cosign
+        run: |
+          echo "### 🔏 Signing checksums.txt using OIDC identity..."
+          # Menggunakan GitHub Actions OIDC (tanpa perlu menyimpan private key di secrets)
+          cosign sign-blob --yes \
+            --output-signature checksums.txt.sig \
+            --output-certificate checksums.txt.pem \
+            checksums.txt
+
+      # =============================
+      # 4) CREATE GITHUB RELEASE
+      # =============================
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        with:
+          files: |
+            checksums.txt
+            checksums.txt.sig
+            checksums.txt.pem
+          body: |
+            ## 🛡️ Rilis Terverifikasi
+            Rilis ini telah ditandatangani secara kriptografis menggunakan **Sigstore/Cosign**.
+            
+            ### Cara Verifikasi:
+            1. Unduh `checksums.txt`, `checksums.txt.sig`, dan `checksums.txt.pem`.
+            2. Jalankan perintah:
+               ```bash
+               cosign verify-blob \
+                 --certificate checksums.txt.pem \
+                 --signature checksums.txt.sig \
+                 checksums.txt \
+                 --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/v*" \
+                 --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+               ```
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
