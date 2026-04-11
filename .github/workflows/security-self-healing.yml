@@ -7,12 +7,14 @@ on:
     branches: [master]
 
 permissions:
-  issues: write
   contents: read
 
 jobs:
   close-resolved-issues:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     # Hanya berjalan jika pipeline utama BERHASIL (Success)
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
