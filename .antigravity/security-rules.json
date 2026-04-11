@@ -1,9 +1,44 @@
 {
     "extension": "google-antigravity-gemini",
     "mode": "security-first",
+    "version": "2.0.0",
     "context": {
         "infra": "Terragrunt v1.0.0, OpenTofu, Shared VPC on GCP",
-        "gke": "Private clusters only, Workload Identity required",
-        "app": "Node.js 20+, Strict BOLA checks"
+        "gke": "Private clusters only, Workload Identity required, Graceful Shutdown mandatory",
+        "app": "Node.js 24 (ESM), Top-Level Await, Strict BOLA checks",
+        "container": "Chainguard Distroless, SHA256 digest pinning, non-root user, read-only filesystem",
+        "cicd": "GitHub Actions, SonarCloud SAST, Snyk SCA, Trivy Image Scan, OWASP ZAP DAST, Cosign Signing, Gitleaks"
+    },
+    "rules": {
+        "dockerfile": {
+            "require_digest_pinning": true,
+            "require_non_root_user": true,
+            "require_readonly_copy": true,
+            "require_multistage_build": true,
+            "block_latest_tag": true,
+            "block_user_root_without_drop": true
+        },
+        "pipeline": {
+            "require_job_level_permissions": true,
+            "require_polp_tokens": true,
+            "block_secrets_in_env_vars": true,
+            "require_sarif_upload": true,
+            "require_sbom_generation": true,
+            "require_image_signing": true
+        },
+        "application": {
+            "require_graceful_shutdown": true,
+            "require_security_headers": true,
+            "require_input_validation": true,
+            "block_console_log_in_production": true,
+            "require_structured_logging": true
+        },
+        "infrastructure": {
+            "block_public_cidr": true,
+            "block_force_destroy": true,
+            "require_deletion_protection": true,
+            "require_workload_identity": true,
+            "block_static_sa_keys": true
+        }
     }
 }
