@@ -89,6 +89,11 @@ function startServer(today) {
       return json(res, { location, weather: today });
     }
 
+    if (req.url === '/robots.txt') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('User-agent: *\nDisallow: /\n');
+    }
+
     if (req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('✅ Weather app running — ready for ZAP scan!\n');
