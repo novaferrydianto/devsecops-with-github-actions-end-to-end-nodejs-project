@@ -17,52 +17,61 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.repository.default_branch == github.ref_name
     
-    # ✅ Job-level elevation
     permissions:
       security-events: write # Untuk upload SARIF ke tab Security
       id-token: write        # Untuk mempublikasikan hasil ke OpenSSF (OIDC)
       contents: read         # Diperlukan untuk checkout
 
     steps:
-      # ✅ Hardened: SHA Pinning (v4.1.1)
       - name: "Checkout code"
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
         with:
           persist-credentials: false
 
       - name: "Run analysis"
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           results_file: results.sarif
           results_format: sarif
-          
-          # 🔑 SCORECARD_TOKEN: Pastikan ini adalah Fine-grained PAT dengan akses read-only
-          # Jika repositori publik, GITHUB_TOKEN bawaan terkadang cukup, tapi PAT lebih disarankan.
           repo_token: ${{ secrets.SCORECARD_TOKEN }}
-          
           publish_results: true
+
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: SARIF_file
+          path: results.sarif
+          retention-days: 5
+
+  upload-results:
+    name: Upload Scorecard results
+    needs: analysis
+    runs-on: ubuntu-latest
+    if: github.event.repository.default_branch == github.ref_name
+
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: "Download artifact"
+        uses: actions/download-artifact@cc200d5a21e4521f7e097491d0411ed026214532 # v4
+        with:
+          name: SARIF_file
+          path: .
 
       - name: "Sanitize SARIF"
         # Menghapus teks "no file associated with this alert" dan menggantinya dengan "."
         # agar valid di GitHub Code Scanning.
+        # Job ini diizinkan memiliki step 'run' karena tidak memproses direktif publish_results.
         run: sed -i 's/no file associated with this alert/./g' results.sarif
-
-      - name: "Upload artifact"
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-        with:
-          name: SARIF file
-          path: results.sarif
-          retention-days: 5
 
       - name: "Upload to code-scanning"
         uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
         with:
           sarif_file: results.sarif
