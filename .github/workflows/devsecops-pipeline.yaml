@@ -117,7 +117,9 @@ jobs:
             echo "❌ Critical/High Vulnerabilities found: $VULN_COUNT"
             exit 1
           fi
-          if [ ! -z "$ILLEGAL_LICENSES" ]; then
+          if [ -z "$ILLEGAL_LICENSES" ]; then
+            echo "✅ All licenses verified."
+          else
             echo "❌ Illegal Licenses found: $ILLEGAL_LICENSES"
             exit 1
           fi
