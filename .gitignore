@@ -59,8 +59,6 @@ security-reports/
 .npm
 .yarn/
 .pnpm-store/
-package-lock.json
-yarn.lock
 
 ### IDE / Editors ###
 .idea/
