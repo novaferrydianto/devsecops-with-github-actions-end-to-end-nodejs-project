@@ -82,29 +82,33 @@ export function startServer(today, location = 'London', kit = {}) {
     res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=()');
     res.setHeader('X-XSS-Protection', '1; mode=block');
 
     if (req.url === '/health') {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       return json(res, { status: 'ok', message: '🛡️ Healthy and secure!' });
     }
 
     if (req.url === '/weather') {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       return json(res, { location, weather: today, recommendations: kit });
     }
 
     if (req.url === '/robots.txt') {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('User-agent: *\nDisallow: /\n');
     }
 
     if (req.url === '/') {
+      res.setHeader('Cache-Control', 'public, max-age=600');
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('✅ Weather app running — ready for ZAP scan!\n');
     }
 
+    res.setHeader('Cache-Control', 'no-store');
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('❌ 404 Not Found\n');
   });
