@@ -257,49 +257,18 @@ jobs:
       - name: Build and Run App Container
         run: |
           docker build -t app-local-dast .
-          docker run -d --network="host" -e OPENWEATHER_API_KEY="dummy" app-local-dast
+          # Meneruskan port ke host agar ZAP container bisa mencapainya via bridge gateway (172.17.0.1)
+          docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy" app-local-dast
           sleep 25
 
       - name: ZAP Baseline Scan
-        run: |
-          docker run --user root -v "$(pwd):/zap/wrk/:rw" --network="host" \
-            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-            -t http://localhost:3000 \
-            -r report.html \
-            -J report.json || true
-
-      - name: Upload ZAP Report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: zaproxy/action-baseline@7c4deb10e6261301961c86d65d54a516394f9aed # v0.14.0
         with:
-          name: zap-report-ci
-          path: |
-            report.html
-            report.json
-
-      - name: Create or Update ZAP Security Issue
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          if [ -f report.json ]; then
-            ALERTS=$(jq '[.site[].alerts[]? | select(.riskcode != "0")] | length' report.json || echo "0")
-            EXISTING_ISSUE=$(gh issue list -R "$REPO" --label "security" --state open --json number --jq '.[0].number')
-            
-            if [ "$ALERTS" -gt "0" ]; then
-              if [ -z "$EXISTING_ISSUE" ] || [ "$EXISTING_ISSUE" == "null" ]; then
-                gh issue create -R "$REPO" \
-                  --title "🎯 DAST ZAP Vulnerabilities Detected" \
-                  --body "OWASP ZAP mendeteksi **$ALERTS** kerentanan pada build #${{ github.run_number }}." \
-                  --label "security"
-              else
-                gh issue comment "$EXISTING_ISSUE" -R "$REPO" --body "⚠️ **Update**: Ditemukan $ALERTS alerts pada build terbaru."
-              fi
-            elif [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
-              gh issue close "$EXISTING_ISSUE" -R "$REPO" -c "✅ Resolved pada build #${{ github.run_number }}."
-            fi
-          fi
+          token: ${{ secrets.GITHUB_TOKEN }}
+          docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
+          target: 'http://172.17.0.1:3000'
+          issue_title: 'Security Vulnerability Found by ZAP'
+          fail_action: false
 
   # =================================================================
   # FINAL SUMMARY
