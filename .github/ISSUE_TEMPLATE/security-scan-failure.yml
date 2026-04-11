@@ -22,6 +22,7 @@ body:
         - "OWASP ZAP (DAST)"
         - "TruffleHog (Secret Leak)"
         - "CodeQL (SAST)"
+        - "Fuzz Testing (fast-check)"
         - "Other"
     validations:
       required: true

@@ -5,9 +5,9 @@
     "context": {
         "infra": "Terragrunt v1.0.0, OpenTofu, Shared VPC on GCP",
         "gke": "Private clusters only, Workload Identity required, Graceful Shutdown mandatory",
-        "app": "Node.js 24 (ESM), Top-Level Await, Strict BOLA checks",
+        "app": "Node.js 24 (ESM), Top-Level Await, Strict BOLA checks, Fuzz Testing",
         "container": "Chainguard Distroless, SHA256 digest pinning, non-root user, read-only filesystem",
-        "cicd": "GitHub Actions, SonarCloud SAST, Snyk SCA, Trivy Image Scan, OWASP ZAP DAST, Cosign Signing, Gitleaks"
+        "cicd": "GitHub Actions, SonarCloud SAST, Snyk SCA, Trivy Image Scan, OWASP ZAP DAST, Cosign Signing, Gitleaks, Fuzz Testing"
     },
     "rules": {
         "dockerfile": {
@@ -24,12 +24,14 @@
             "block_secrets_in_env_vars": true,
             "require_sarif_upload": true,
             "require_sbom_generation": true,
-            "require_image_signing": true
+            "require_image_signing": true,
+            "require_signed_releases": true
         },
         "application": {
             "require_graceful_shutdown": true,
             "require_security_headers": true,
             "require_input_validation": true,
+            "require_fuzz_testing": true,
             "block_console_log_in_production": true,
             "require_structured_logging": true
         },
