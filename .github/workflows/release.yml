@@ -5,15 +5,17 @@ on:
     tags:
       - 'v*' # Trigger saat tag v1.0.0, v2.1.0, dll didorong
 
-# ✅ PoLP Permissions (Wajib untuk Keyless Signing via OIDC)
+# ✅ PoLP Permissions (Hanya baca di level global)
 permissions:
-  contents: write # Untuk membuat GitHub Release & mengunggah aset
-  id-token: write # Untuk otentikasi Sigstore/Cosign ke Fulcio
+  contents: read
 
 jobs:
   build_and_release:
     name: 🏗️ Build & Signed Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Untuk membuat GitHub Release & mengunggah aset
+      id-token: write # Untuk otentikasi Sigstore/Cosign ke Fulcio
     steps:
       # =============================
       # 1) SETUP & CHECKOUT
