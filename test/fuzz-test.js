@@ -27,7 +27,7 @@ describe('🔀 Fuzz Testing (fast-check)', function () {
 
     it('should return true only when rainFall > 0', () => {
       fc.assert(
-        fc.property(fc.float({ min: Math.fround(0.01), max: Math.fround(1000) }), (rainFall) => {
+        fc.property(fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true }), (rainFall) => {
           expect(doINeed.umbrella({ rainFall })).to.equal(true);
         }),
         { numRuns: 200 }
@@ -60,7 +60,7 @@ describe('🔀 Fuzz Testing (fast-check)', function () {
 
     it('should return true when temperature is below 15', () => {
       fc.assert(
-        fc.property(fc.float({ min: Math.fround(-50), max: Math.fround(14.99) }), (minTemp) => {
+        fc.property(fc.float({ min: Math.fround(-50), max: Math.fround(14.99), noNaN: true }), (minTemp) => {
           expect(doINeed.jumper({ minTemp })).to.equal(true);
         }),
         { numRuns: 200 }
