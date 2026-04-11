@@ -2,47 +2,40 @@
 
 ## Supported Versions
 
-As this is a demonstration project for DevSecOps practices, we prioritize security updates for the latest deployment on the main branch.
+We prioritize security updates for the latest code on the main branch and active distributions.
 
-| Version | Supported          | Notes |
-| ------- | ------------------ | ----- |
-| `master`| :white_check_mark: | The latest code on the main branch. |
-| `latest`| :white_check_mark: | The latest Docker image tag. |
-| < 1.0.0 | :x:                | Older releases are not supported. |
+| Version | Supported          | Notes                               |
+| ------- | ------------------ | ----------------------------------- |
+| `master`| :white_check_mark: | Latest production-ready code.      |
+| `latest`| :white_check_mark: | Active Docker distribution tag.     |
+| < 1.0.0 | :x:                | Deprecated versions; not supported. |
 
 ## Reporting a Vulnerability
 
-We take the security of this application and its pipeline seriously. We appreciate the efforts of security researchers and developers who help us improve the security posture of this project.
+We appreciate the efforts of security researchers and developers who help us improve the security posture of this project.
+
+### 🛡️ Use GitHub Security Advisories
+We strongly encourage reporters to use the **[GitHub Private Vulnerability Reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-publicizing-security-vulnerabilities/privately-reporting-a-security-vulnerability)** feature in the Security tab of this repository. This provides a secure, private environment to collaborate on a fix.
 
 ### ⛔ Do NOT open a public issue
-If you have discovered a security vulnerability, please **DO NOT** open a public GitHub Issue, as this may allow malicious actors to exploit the vulnerability before we have a chance to fix it.
+Please **DO NOT** open a public GitHub Issue for security vulnerabilities. Public disclosure without a fix puts users at risk.
 
-### 📧 How to Report
-Please report sensitive security issues via email to: **[MASUKKAN EMAIL ANDA DISINI]**
+## Disclosure Policy
 
-Please include the following details in your report:
-1.  **Type of Vulnerability:** (e.g., XSS, SQL Injection, Pipeline Secret Leak, Container Escalation).
-2.  **Full Path/Location:** The file, URL, or pipeline stage involved.
-3.  **Proof of Concept (PoC):** Steps to reproduce the issue reliably.
-4.  **Impact:** How could an attacker exploit this?
+This project adheres to the **[Coordinated Vulnerability Disclosure (CVD)](https://en.wikipedia.org/wiki/Coordinated_vulnerability_disclosure)** model. 
 
 ### ⏳ Response Timeline
-We are committed to the following timeline:
-* **Acknowledgment:** We aim to acknowledge receiving your report within **48 hours**.
-* **Assessment:** We will confirm the vulnerability and determine its severity within **5 days**.
-* **Fix:** We aim to release a patch or mitigation as soon as possible, depending on complexity.
+* **Acknowledgment:** We aim to respond within **48 hours** to any report.
+* **Assessment:** We will perform an initial assessment and confirm the vulnerability within **7 business days**.
+* **Remediation:** We will work to release a fix or mitigation as soon as possible.
+* **Public Disclosure:** Vulnerabilities will be publicly disclosed via a GitHub Security Advisory once a patch is available.
 
 ### 🛡️ Scope
 We are interested in vulnerabilities regarding:
-* The Node.js Application logic (Code injection, Logic flaws).
-* The CI/CD Pipeline configuration (GitHub Actions workflows).
-* The Container Image configuration (Dockerfile, Base image issues).
-* Supply Chain integrity (Dependency vulnerabilities).
-
-### ❌ Out of Scope
-* DDoS attacks or other volume-based attacks.
-* Social engineering attacks.
-* Vulnerabilities in third-party services (e.g., GitHub itself, Docker Hub itself) unless it directly affects our configuration.
+* The Node.js Application logic and core dependencies.
+* CI/CD Pipeline configuration (GitHub Actions workflows).
+* Container Hardening (Docker/Chainguard configurations).
+* Critical Supply Chain integrity.
 
 ---
 *Thank you for helping keep this project secure!*
