@@ -1,0 +1,9 @@
+{
+    "extension": "google-antigravity-gemini",
+    "mode": "security-first",
+    "context": {
+        "infra": "Terragrunt v1.0.0, OpenTofu, Shared VPC on GCP",
+        "gke": "Private clusters only, Workload Identity required",
+        "app": "Node.js 20+, Strict BOLA checks"
+    }
+}
