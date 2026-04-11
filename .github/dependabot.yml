@@ -10,7 +10,7 @@ updates:
     assignees:
       - "novaferrydianto"
     open-pull-requests-limit: 10
-    # ✅ Penting: Dependabot akan mempertahankan format SHA jika Anda sudah menggunakannya
+    # ✅ Correct versioning strategy placement
     versioning-strategy: increase-if-necessary
     groups:
       github-actions-updates:
@@ -34,6 +34,8 @@ updates:
       - "novaferrydianto"
     assignees:
       - "novaferrydianto"
+    open-pull-requests-limit: 5
+    # ✅ Improved Grouping Syntax
     groups:
       nodejs-dependencies:
         patterns:

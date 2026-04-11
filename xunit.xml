@@ -1,17 +1,17 @@
 <testExecutions version="1">
 <file path="test\fetch-weather-helper-test.js">
-<testCase name="Weather Helper Functions: should correctly convert Kelvin to Celsius" duration="2"/>
+<testCase name="Weather Helper Functions: should correctly convert Kelvin to Celsius" duration="1"/>
 <testCase name="Weather Helper Functions: should correctly extract rainfall from object" duration="1"/>
 </file>
 <file path="test\preparing-data-test.js">
-<testCase name="Weather data processing: should process fetched weather data correctly" duration="16"/>
-<testCase name="Weather data processing: should handle missing rain data gracefully" duration="5"/>
-<testCase name="Weather data processing: should throw an error when API responds with 500" duration="3"/>
+<testCase name="Weather data processing: should process fetched weather data correctly" duration="8"/>
+<testCase name="Weather data processing: should handle missing rain data gracefully" duration="1"/>
+<testCase name="Weather data processing: should throw an error when API responds with 500" duration="1"/>
 </file>
 <file path="test\weather-kit-test.js">
-<testCase name="Test the weather kit module&apos;s basic functionality: should return true for umbrella test if it is raining" duration="1"/>
+<testCase name="Test the weather kit module&apos;s basic functionality: should return true for umbrella test if it is raining" duration="0"/>
 <testCase name="Test the weather kit module&apos;s basic functionality: should return true if suncream is required" duration="0"/>
-<testCase name="Test the weather kit module&apos;s basic functionality: should return true if jumper is required" duration="0"/>
+<testCase name="Test the weather kit module&apos;s basic functionality: should return true if jumper is required" duration="1"/>
 <testCase name="Test the weather kit module&apos;s basic functionality: should always return true as water is always required" duration="0"/>
 </file>
 </testExecutions>

@@ -22,25 +22,44 @@ const options = commandLineArgs([
 const location = options.location;
 
 // 🚀 Main logic
-fetchWeather(location)
-  .then((today) => {
-    const weatherKit = [
-      { name: 'Umbrella', value: prepareForWeather.doINeed.umbrella(today) },
-      { name: 'Suncream', value: prepareForWeather.doINeed.suncream(today) },
-      { name: 'Jumper', value: prepareForWeather.doINeed.jumper(today) },
-      { name: 'Water', value: prepareForWeather.doINeed.water(today) },
-    ];
+let server;
 
-    console.log(`\n🌤️ Weather forecast for ${location}:\n`.cyan);
-    for (const item of weatherKit) printLine(item.value, item.name);
+try {
+  const today = await fetchWeather(location);
+  const weatherKit = [
+    { name: 'Umbrella', value: prepareForWeather.doINeed.umbrella(today) },
+    { name: 'Suncream', value: prepareForWeather.doINeed.suncream(today) },
+    { name: 'Jumper', value: prepareForWeather.doINeed.jumper(today) },
+    { name: 'Water', value: prepareForWeather.doINeed.water(today) },
+  ];
 
-    startServer(today);
-  })
-  .catch((err) => {
-    console.error('❌ Failed to fetch weather data:', err?.message || err);
-    console.log('⚠️ Starting fallback server for health checks & DAST...');
-    startServer({ error: "API connection failed, fallback mode active" });
+  console.log(`\n🌤️ Weather forecast for ${location}:\n`.cyan);
+  for (const item of weatherKit) printLine(item.value, item.name);
+
+  server = startServer(today);
+} catch (err) {
+  console.error('❌ Failed to fetch weather data:', err?.message || err);
+  console.log('⚠️ Starting fallback server for health checks & DAST...');
+  server = startServer({ error: "API connection failed, fallback mode active" });
+}
+
+// 🛑 SRE: Graceful Shutdown capability for GKE pods
+const shutdown = () => {
+  console.log('\n🛑 Receiving shutdown signal. Shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed.');
+    process.exit(0);
   });
+  
+  // Force exit if connections take too long to close
+  setTimeout(() => {
+    console.error('❌ Forcefully shutting down');
+    process.exit(1);
+  }, 10000).unref();
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // 🎨 Helpers
 function printLine(required, text) {
@@ -83,6 +102,8 @@ function startServer(today) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🌦️ App running securely at http://0.0.0.0:${PORT}`.yellow);
   });
+
+  return server;
 }
 
 function json(res, obj) {
