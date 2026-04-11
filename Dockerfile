@@ -1,7 +1,7 @@
 # =================================================================
 # STAGE 1: Build & Dependencies
 # =================================================================
-FROM cgr.dev/chainguard/node:latest-dev AS builder
+FROM cgr.dev/chainguard/node:latest-dev@sha256:e9dc1d104fe001f9b977c702586259c8bae58c84e90c07c473b0d1eb51ddce70 AS builder
 
 # Set context ke user node sejak awal
 WORKDIR /app
@@ -20,7 +20,7 @@ RUN npm prune --production
 # =================================================================
 # STAGE 2: Hardened Runtime
 # =================================================================
-FROM cgr.dev/chainguard/node:latest
+FROM cgr.dev/chainguard/node:latest@sha256:47ff69677e65c45de946df5ef4107e3c4cccf0bee4ed4aacf89a4c6c5ec93d55
 
 WORKDIR /app
 
