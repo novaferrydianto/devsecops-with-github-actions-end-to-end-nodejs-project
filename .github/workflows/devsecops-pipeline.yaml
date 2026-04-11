@@ -99,8 +99,7 @@ jobs:
       - name: Generate Snyk HTML Report
         if: always()
         run: |
-          npm install -g snyk-to-html@2.3.6
-          snyk-to-html -i snyk-report.json -o snyk-report.html
+          npx snyk-to-html -i snyk-report.json -o snyk-report.html
 
       - name: Enforce Security & Whitelist License Policy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
