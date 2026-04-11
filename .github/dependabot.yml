@@ -10,8 +10,6 @@ updates:
     assignees:
       - "novaferrydianto"
     open-pull-requests-limit: 10
-    # ✅ Correct versioning strategy placement
-    versioning-strategy: increase-if-necessary
     groups:
       github-actions-updates:
         patterns:
