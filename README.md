@@ -40,13 +40,15 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
    - Trivy filesystem & OS package scan
 
 5. **Supply Chain Security — Cosign**  
-   - Image signing  
-   - Prevent tampering & ensure provenance
+   - **Image Signing**: Menjamin integritas image di registri.
+   - **Signed Releases**: Setiap rilis GitHub (`v*`) disertai tanda tangan digital asetnya.
 
 6. **DAST — OWASP ZAP**  
-   - Full dynamic scan  
-   - HTML/JSON reports  
-   - Auto-create GitHub Issues
+   - Full dynamic scan & HTML/JSON reports.
+   - Auto-create GitHub Issues untuk temuan kerentanan.
+
+7. **Fuzz Testing — fast-check**  
+   - Property-based testing untuk mendeteksi edge-case yang sulit ditemukan tes standar.
 
 ---
 
@@ -61,8 +63,12 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 │       ├── actionlint.yml
 │       ├── devsecops-pipeline.yaml
 │       ├── secret-scanner.yaml
+│       ├── release.yml
 │       └── dependabot.yml
 │
+├── CHANGELOG.md
+├── SECURITY.md
+├── README.md
 ├── test-data/
 │   ├── sample-data.js
 │   └── sample-weather-raw.json
@@ -77,8 +83,6 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 ├── Dockerfile
 ├── Dockerfile.dev
 ├── podman-compose.yml
-├── SECURITY.md
-├── README.md
 ├── app.js
 ├── fetch-weather.js
 ├── fix-mocha-exit.js
@@ -157,9 +161,10 @@ App running at: http://localhost:3000
 | Secret Scanning | Gitleaks | Detect hardcoded credentials |
 | SAST | SonarCloud | Static analysis |
 | SCA | Snyk | Dependency scan |
+| Fuzzing | fast-check | Property-based testing |
 | SBOM | Trivy | Software Bill of Materials (CycloneDX) |
 | Container Scan | Trivy | OS & FS vulnerability scan |
-| Signing | Cosign | Image signature & provenance |
+| Signing | Cosign | Image & Release signature |
 | DAST | OWASP ZAP | Runtime penetration testing |
 
 ---
