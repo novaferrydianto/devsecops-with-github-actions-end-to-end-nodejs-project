@@ -7,12 +7,12 @@ FROM cgr.dev/chainguard/node:latest-dev@sha256:e9dc1d104fe001f9b977c702586259c8b
 WORKDIR /app
 
 # ✅ FIX: Tambahkan --chown=node:node agar npm punya izin akses
-COPY --chown=node:node --chmod=0444 package.json package-lock.json ./
+COPY --chown=node:node package.json package-lock.json ./
 
 RUN npm ci --include=dev
 
 # ✅ FIX: Pastikan source code juga dimiliki oleh user node
-COPY --chown=node:node --chmod=0555 . .
+COPY --chown=node:node . .
 
 # Sekarang npm prune tidak akan kena EACCES
 RUN npm prune --production
