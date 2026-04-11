@@ -79,14 +79,28 @@ describe('🔀 Fuzz Testing (fast-check)', function () {
     });
   });
 
+  describe('doINeed.boots', () => {
+    it('should never throw on arbitrary weather properties', () => {
+      fc.assert(
+        fc.property(fc.float(), fc.float(), (snowFall, rainFall) => {
+          const result = doINeed.boots({ snowFall, rainFall });
+          expect(result).to.be.a('boolean');
+        }),
+        { numRuns: 500 }
+      );
+    });
+  });
+
   describe('Resilience: malformed input objects', () => {
     it('should handle undefined/null properties gracefully', () => {
       fc.assert(
         fc.property(
           fc.record({
             rainFall: fc.oneof(fc.float(), fc.constant(undefined), fc.constant(null)),
+            snowFall: fc.oneof(fc.float(), fc.constant(undefined), fc.constant(null)),
             maxTemp: fc.oneof(fc.float(), fc.constant(undefined), fc.constant(null)),
             minTemp: fc.oneof(fc.float(), fc.constant(undefined), fc.constant(null)),
+            humidity: fc.oneof(fc.float(), fc.constant(undefined), fc.constant(null)),
             cloudCover: fc.oneof(fc.float(), fc.constant(undefined), fc.constant(null)),
           }),
           (weatherData) => {
@@ -95,6 +109,7 @@ describe('🔀 Fuzz Testing (fast-check)', function () {
             expect(() => doINeed.suncream(weatherData)).to.not.throw();
             expect(() => doINeed.jumper(weatherData)).to.not.throw();
             expect(() => doINeed.water(weatherData)).to.not.throw();
+            expect(() => doINeed.boots(weatherData)).to.not.throw();
           }
         ),
         { numRuns: 500 }

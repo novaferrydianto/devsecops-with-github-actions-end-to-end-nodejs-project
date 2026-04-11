@@ -38,27 +38,29 @@ function processResults(allResults) {
     minTemp: kelvinToCelsius(allResults?.main?.temp_min ?? 0),
     maxTemp: kelvinToCelsius(allResults?.main?.temp_max ?? 0),
     chanceRain: 0.83,
-    rainFall: getRainFall(allResults?.rain),
+    rainFall: getVolume(allResults?.rain),
+    snowFall: getVolume(allResults?.snow),
+    humidity: allResults?.main?.humidity ?? 0,
     cloudCover: allResults?.clouds?.all ?? 0,
   };
 }
 
-function kelvinToCelsius(kTemp) {
+export function kelvinToCelsius(kTemp) {
   return Math.round(kTemp - 273);
 }
 
-function getRainFall(rainObj) {
-  if (!rainObj) return 0;
-  if (typeof rainObj === "string") {
+export function getVolume(obj) {
+  if (!obj) return 0;
+  if (typeof obj === "string") {
     try {
-      return getRainFall(JSON.parse(rainObj));
+      return getVolume(JSON.parse(obj));
     } catch {
       return 0;
     }
   }
 
   for (const key of ["1h", "2h", "3h"]) {
-    const val = Number(rainObj[key]);
+    const val = Number(obj[key]);
     if (!Number.isNaN(val)) return val;
   }
 

@@ -33,5 +33,19 @@ export const weatherData = {
     maxTemp: 27,
     rainFall: 5,
     cloudCover: 70
+  },
+  snowy_cold: {
+    minTemp: -5,
+    maxTemp: 1,
+    rainFall: 0,
+    snowFall: 10,
+    cloudCover: 100
+  },
+  extreme_humidity: {
+    minTemp: 28,
+    maxTemp: 35,
+    rainFall: 0,
+    humidity: 95,
+    cloudCover: 10
   }
 };

@@ -32,12 +32,17 @@ export async function run() {
       { name: 'Suncream', value: prepareForWeather.doINeed.suncream(today) },
       { name: 'Jumper', value: prepareForWeather.doINeed.jumper(today) },
       { name: 'Water', value: prepareForWeather.doINeed.water(today) },
+      { name: 'Boots', value: prepareForWeather.doINeed.boots(today) },
+      { name: 'Stay Hydrated', value: prepareForWeather.doINeed.stayHydrated(today) },
     ];
 
     console.info(`\n🌤️ Weather forecast for ${location}:\n`.cyan); // NOSONAR
     for (const item of weatherKit) printLine(item.value, item.name);
 
-    server = startServer(today, location);
+    // Convert array to object for API response
+    const kit = weatherKit.reduce((acc, item) => ({ ...acc, [item.name.toLowerCase().replace(' ', '')]: item.value }), {});
+
+    server = startServer(today, location, kit);
   } catch (err) {
     console.error('❌ Failed to fetch weather data:', err?.message || err); // NOSONAR
     console.info('⚠️ Starting fallback server for health checks & DAST...'); // NOSONAR
@@ -67,7 +72,7 @@ function printLine(required, text) {
 }
 
 // 🌐 Basic HTTP server (for DAST / ZAP)
-export function startServer(today, location = 'London') {
+export function startServer(today, location = 'London', kit = {}) {
   const PORT = process.env.PORT || 3000;
 
   const server = http.createServer((req, res) => {
@@ -87,7 +92,7 @@ export function startServer(today, location = 'London') {
     }
 
     if (req.url === '/weather') {
-      return json(res, { location, weather: today });
+      return json(res, { location, weather: today, recommendations: kit });
     }
 
     if (req.url === '/robots.txt') {
