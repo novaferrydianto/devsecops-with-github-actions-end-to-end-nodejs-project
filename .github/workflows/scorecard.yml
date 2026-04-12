@@ -60,7 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: "Download artifact"
-        uses: actions/download-artifact@cc200d5a21e4521f7e097491d0411ed026214532 # v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e00597137296bc710a # v4.1.8
         with:
           name: SARIF_file
           path: .
