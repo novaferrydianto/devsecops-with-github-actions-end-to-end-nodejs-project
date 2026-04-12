@@ -43,7 +43,8 @@ jobs:
     steps:
     # ✅ REMEDIATION 2: Upgraded to v5 (Native Node 24 support)
     - name: Checkout repository
-      uses: actions/checkout@bb12362b5d8a053eaa0ac8fa3b40d7e05a33cc8 # v6.0.2
+      uses: actions/checkout@v6
+      
     - name: Initialize CodeQL
       uses: github/codeql-action/init@c10b8064de6f491fea524254123dbe5e09572f13 # v4
       with:
