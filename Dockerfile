@@ -1,7 +1,7 @@
 # =================================================================
 # STAGE 1: Build & Dependencies
 # =================================================================
-FROM cgr.dev/chainguard/node:latest-dev@sha256:d201cee80fc4bd2881571d9d7c25c3551a32281d655409c80d9c600214afa5cf AS builder
+FROM cgr.dev/chainguard/node:latest-dev@sha256:ffacf5b924201ec417c94d04c471d0f994d600e5ed9a21bd0b969a5941a5435a AS builder
 
 # Set context ke user node sejak awal
 WORKDIR /app
