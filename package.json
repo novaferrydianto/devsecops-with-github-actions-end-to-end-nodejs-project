@@ -34,7 +34,7 @@
     "supertest": "^7.2.2"
   },
   "dependencies": {
-    "@aikidosec/firewall": "^1.8.23",
+    "@aikidosec/firewall": "^1.8.24",
     "colors": "^1.4.0",
     "command-line-args": "^6.0.2",
     "dotenv": "^17.4.2",
