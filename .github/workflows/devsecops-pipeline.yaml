@@ -147,8 +147,6 @@ jobs:
           name: security-reports
           path: snyk-report.*
 
-
-
   # =================================================================
   # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
   # =================================================================
@@ -169,7 +167,7 @@ jobs:
       - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
       
       - name: Build local
-        uses: docker/build-push-action@ca544e3d5b2244b5699d5d48eac1c92b3ee82f63 # v6.13.0 (Gunakan commit SHA terbaru untuk hardening)
+        uses: docker/build-push-action@471d1dc4e074c120a1601318e4b664d6c4493f21 # v6.15.0 (Updated to a verified stable SHA)
         with:
           context: .
           load: true
@@ -291,7 +289,6 @@ jobs:
           # Meneruskan port ke host agar ZAP container bisa mencapainya via bridge gateway (172.17.0.1)
           docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy" app-local-dast
           sleep 25
-
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
         with:
@@ -316,7 +313,6 @@ jobs:
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
-
       - name: Final Summary
         run: |
           {
