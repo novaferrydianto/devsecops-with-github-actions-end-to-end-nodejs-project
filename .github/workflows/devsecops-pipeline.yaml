@@ -167,7 +167,7 @@ jobs:
       - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
       
       - name: Build local
-        uses: docker/build-push-action@v6 # ✅ FIX: Menggunakan rilis upstream stable resmi Docker (Bebas typo SHA)
+        uses: docker/build-push-action@v6
         with:
           context: .
           load: true
@@ -242,7 +242,7 @@ jobs:
           egress-policy: audit
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@dc87c7d60bc9e0d29994c934e9b6c4133457f66e # v3.5.0 ✅ FIX: Berpindah ke installer resmi Sigstore komunitas (Bebas lisensi korporasi)
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.2 ✅ ALIGNED: Menggunakan rilis tepat v4.1.2 resmi Sigstore komunitas
         with:
           cosign-release: 'v2.2.4'
 
