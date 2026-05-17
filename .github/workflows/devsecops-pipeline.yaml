@@ -167,7 +167,7 @@ jobs:
       - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
       
       - name: Build local
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0 (Koreksi SHA Resmi Docker)
+        uses: docker/build-push-action@v6 # ✅ FIX: Menggunakan rilis upstream stable resmi Docker (Bebas typo SHA)
         with:
           context: .
           load: true
@@ -241,11 +241,17 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: step-security/cosign-installer@9610e5af306c47db1756d9e09a0388449e336ab7 # v4.0.0
-      - uses: step-security/docker-login-action@6aa05fe688caf2c58e784663f01b3415ced503e8 # v3.7.0
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@dc87c7d60bc9e0d29994c934e9b6c4133457f66e # v3.5.0 ✅ FIX: Berpindah ke installer resmi Sigstore komunitas (Bebas lisensi korporasi)
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Login to DockerHub
+        uses: step-security/docker-login-action@6aa05fe688caf2c58e784663f01b3415ced503e8 # v3.7.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Sign Image
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
