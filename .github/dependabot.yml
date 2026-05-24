@@ -1,63 +1,32 @@
+# .github/dependabot.yml
+# Keeps the SHA-pinned GitHub Actions (and app/base-image deps) up to date.
+# Dependabot updates BOTH the commit SHA and the trailing "# vX.Y.Z" comment,
+# so pinning stays secure AND readable without manual SHA hunting.
 version: 2
 updates:
-  # 1. GitHub Actions: Hardened SHA Updates
+  # --- GitHub Actions: refreshes the pinned commit SHAs in the workflow ---
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily" # Lebih agresif selama masa transisi Node 24
-    reviewers:
-      - "novaferrydianto"
-    assignees:
-      - "novaferrydianto"
-    open-pull-requests-limit: 10
+      interval: "weekly"
+    open-pull-requests-limit: 5
     groups:
-      github-actions-updates:
-        patterns:
-          - "*" # Gabungkan semua update actions agar log Node 20 bersih dalam satu PR
-    commit-message:
-      prefix: "ci"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "security"
-      - "github-actions"
+      ci-actions:
+        patterns: ["*"]   # one grouped PR instead of many noisy ones
 
-  # 2. NPM: Grouped for Efficiency
+  # --- Node.js app dependencies (package.json / package-lock.json) ---
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: daily
-      day: "monday"
-    reviewers:
-      - "novaferrydianto"
-    assignees:
-      - "novaferrydianto"
-    open-pull-requests-limit: 5
-    # ✅ Improved Grouping Syntax
+      interval: "weekly"
+    open-pull-requests-limit: 10
     groups:
-      nodejs-dependencies:
-        patterns:
-          - "*"
-    commit-message:
-      prefix: "build"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "javascript"
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
 
-  # 3. Docker: Base Image Hardening
+  # --- Dockerfile base image (e.g. cgr.dev/chainguard/node) ---
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: daily
-      day: "monday"
-    reviewers:
-      - "novaferrydianto"
-    # ✅ Jika Anda menggunakan multi-stage build atau banyak Dockerfile
+      interval: "weekly"
     open-pull-requests-limit: 5
-    commit-message:
-      prefix: "ci"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "docker"

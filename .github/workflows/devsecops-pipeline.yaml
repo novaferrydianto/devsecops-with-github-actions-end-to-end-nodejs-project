@@ -1,3 +1,32 @@
+# =====================================================================
+# DevSecOps Pipeline — Hardened Rewrite
+# ---------------------------------------------------------------------
+# Provenance chain enforced end-to-end:
+#   single build  ->  scan (fail-closed)  ->  push BY DIGEST
+#                 ->  cosign sign BY DIGEST  ->  cosign verify
+#                 ->  SBOM attest (CycloneDX)  ->  verify-attestation
+#
+# Key changes vs. previous version:
+#   * SCAN == SHIP: image is built EXACTLY ONCE, passed between jobs as a
+#     tar artifact (docker save/load). No more "build A, scan A, ship B".
+#   * Sign & verify by IMMUTABLE DIGEST (not the mutable :tag).
+#   * Cosign migrated to KEYLESS / OIDC (id-token: write) — no private key
+#     on the runner filesystem, no key rotation burden.
+#   * SBOM is now PERSISTED (artifact) AND ATTESTED to the image digest.
+#   * Security gates are FAIL-CLOSED (exit 1), not fail-open (exit 0).
+#   * DAST reuses the exact scanned image (no 3rd rebuild) and resolves the
+#     bridge gateway dynamically instead of hardcoding 172.17.0.1.
+#   * Sonar migrated: sonarcloud-github-action (archived Oct-2025) ->
+#     sonarqube-scan-action (+ SONAR_HOST_URL).
+#   * Final summary is DYNAMIC (reads real job outcomes) — no security theater.
+#
+# NOTE on pinning: every third-party action is pinned to a full commit SHA
+# (the trailing comment records the human-readable version). SHAs were verified
+# against each project's official GitHub Releases page. To keep these pins fresh
+# and auditable over time, enable Dependabot for the "github-actions" ecosystem
+# (.github/dependabot.yml) — it bumps the SHA + version comment via PRs.
+# =====================================================================
+
 name: DevSecOps Pipeline
 on:
   push:
@@ -16,12 +45,11 @@ permissions:
 # ✅ Global Config
 env:
   NODE_VERSION: 24
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ${{ secrets.REGISTRY }}
   IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  LOCAL_IMAGE_REPO: docker.io/${{ github.repository }}
-  LOCAL_IMAGE_TAG: ${{ github.sha }}
+  # Single, canonical local tag reused by every job via the image artifact.
+  LOCAL_IMAGE: local/app:${{ github.sha }}
 
 defaults:
   run:
@@ -29,7 +57,7 @@ defaults:
 
 jobs:
   # =================================================================
-  # STAGE 1: SAST & SCA
+  # STAGE 1: SAST & SCA  (run in parallel)
   # =================================================================
   test_and_sast:
     runs-on: ubuntu-latest
@@ -45,7 +73,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Sonar needs full history for blame/relevancy
 
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -61,14 +89,18 @@ jobs:
 
       - name: Install & Test
         run: |
+          set -euo pipefail
           npm ci
           npm test
           npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@ffc3010689be73b8e5ae0c57ce35968afd7909e8 # v5
+      - name: SonarQube Cloud Scan
+        # MIGRATED: sonarcloud-github-action was archived/deprecated (Oct 2025).
+        # sonarqube-scan-action is the drop-in replacement and now requires SONAR_HOST_URL.
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
             -Dsonar.organization=devsecopsganodejs
@@ -99,7 +131,7 @@ jobs:
 
       - name: Snyk Scan
         uses: snyk/actions/node@9adf32b1121593767fc3c057af55b55db032dc04 # master
-        continue-on-error: true
+        continue-on-error: true # we capture the report; the gate step below decides pass/fail
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -109,51 +141,67 @@ jobs:
       - name: Generate Snyk HTML Report
         if: always()
         run: |
-          npx snyk-to-html -i snyk-report.json -o snyk-report.html
+          npx snyk-to-html -i snyk-report.json -o snyk-report.html || true
 
-      - name: Enforce Security & Whitelist License Policy
+      - name: Enforce Security & Whitelist License Policy (FAIL-CLOSED)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           set -euo pipefail
-          if [ ! -f snyk-report.json ]; then echo "Snyk report missing"; exit 0; fi
+          # FAIL-CLOSED: a missing report means the scanner failed = we DO NOT ship.
+          if [ ! -f snyk-report.json ]; then
+            echo "❌ Snyk report missing — treating as a hard failure (fail-closed)."
+            exit 1
+          fi
+
           VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
           ALLOWED_REGEX="MIT|Apache-2.0|BSD-2-Clause|BSD-3-Clause|ISC"
           ILLEGAL_LICENSES=$(jq -r --arg ALLOWED "$ALLOWED_REGEX" '
             [.vulnerabilities[]? | select(.type=="license") | select(.title | test($ALLOWED; "i") | not) | .title] | unique | join(", ")
           ' snyk-report.json)
-          
+
           if [ "$VULN_COUNT" -ne "0" ]; then
             echo "❌ Critical/High Vulnerabilities found: $VULN_COUNT"
             exit 1
           fi
-          if [ -z "$ILLEGAL_LICENSES" ]; then
-            echo "✅ All licenses verified."
-          else
+          if [ -n "$ILLEGAL_LICENSES" ]; then
             echo "❌ Illegal Licenses found: $ILLEGAL_LICENSES"
             exit 1
           fi
+          echo "✅ Snyk vulnerability + license policy passed."
 
-      - name: Trivy FS Scan
+      - name: Trivy FS Scan (ENFORCING)
+        # Was report-only before. Now gates on fixable CRITICAL/HIGH.
+        # Relax to `exit-code: 0` (report-only) if this proves too strict for your repo.
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
+          scan-ref: .
           format: table
-          output: trivy-report.txt
+          output: trivy-fs-report.txt
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
 
       - name: Upload Security Artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: security-reports
-          path: snyk-report.*
+          path: |
+            snyk-report.*
+            trivy-fs-report.txt
+          if-no-files-found: ignore
 
   # =================================================================
-  # STAGE 2: CONTAINER SECURITY (CHAINGUARD COMPATIBLE)
+  # STAGE 2: BUILD ONCE + IMAGE SCAN (fail-closed) + SBOM
+  # The image is built a SINGLE time here and shipped to downstream jobs
+  # as a tar artifact, so what gets signed/DAST-tested is byte-identical
+  # to what was scanned.
   # =================================================================
-  image_build_local_trivy_sarif:
+  build_scan:
     needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
-    name: 🧪 Build & Image Scan
+    name: 🧪 Build (once) & Image Scan
     permissions:
       contents: read
       security-events: write
@@ -165,20 +213,22 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
-      
-      - name: Build local
-        uses: docker/build-push-action@v6
+
+      - name: Build image ONCE (load into local daemon)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: .
           load: true
-          tags: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+          tags: ${{ env.LOCAL_IMAGE }}
+          provenance: false # deterministic single-arch local image for scan/save
 
-      - name: Trivy Image Scan (SARIF)
+      # --- Informational SARIF for the Security tab (never blocks) ---
+      - name: Trivy Image Scan (SARIF — informational)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         continue-on-error: true
         with:
           scan-type: image
-          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+          image-ref: ${{ env.LOCAL_IMAGE }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -190,90 +240,160 @@ jobs:
           sarif_file: trivy-results.sarif
           category: trivy-image
 
+      # --- ENFORCING gate: this is the one that actually blocks the build ---
+      - name: Trivy Image Scan (ENFORCING gate — fail-closed)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true # don't block on CVEs with no available fix; remove to be stricter
+          exit-code: 1
+
+      # Steps below only run if the gate above passed -> we only ever
+      # persist / SBOM / ship images that cleared the gate.
       - name: Generate SBOM (CycloneDX)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+          image-ref: ${{ env.LOCAL_IMAGE }}
           format: cyclonedx
           output: trivy-sbom.json
 
+      - name: Save the built image (single-build provenance)
+        run: |
+          set -euo pipefail
+          docker save "${{ env.LOCAL_IMAGE }}" -o image.tar
+          ls -lh image.tar
+
+      - name: Upload image artifact (consumed by deliver/DAST without rebuild)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: app-image
+          path: image.tar
+          retention-days: 1
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sbom-cyclonedx
+          path: trivy-sbom.json
+          retention-days: 7
+
   # =================================================================
-  # STAGE 3: DELIVERY & SIGNING
+  # STAGE 3: DELIVERY & SIGNING  (master push only)
+  # Loads the EXACT scanned image, pushes BY DIGEST, then signs/verifies
+  # and attests the SBOM to that same digest. Keyless (OIDC) — no key files.
   # =================================================================
-  podman_build_push:
-    needs: [image_build_local_trivy_sarif]
+  deliver_sign:
+    needs: [build_scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    name: 📦 Podman Build & Push
+    name: 📦🔏 Push by Digest, Sign, Verify & Attest
     permissions:
       contents: read
+      id-token: write # keyless cosign via GitHub OIDC
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - name: Install & Login Podman
-        run: |
-          sudo apt-get update && sudo apt-get install -y podman
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-      - name: Build & Push
-        run: |
-          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
-          TAG="${GITHUB_SHA::7}"
-          podman build -t "$IMAGE_PATH:$TAG" -t "$IMAGE_PATH:latest" .
-          podman push "$IMAGE_PATH:$TAG"
-          podman push "$IMAGE_PATH:latest"
-
-  cosign_sign:
-    needs: [podman_build_push]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    name: 🔏 Cosign Sign & Verify
-    permissions:
-      contents: read
-      id-token: write 
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+      - name: Download built image (no rebuild)
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          egress-policy: audit
+          name: app-image
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.2 ✅ ALIGNED: Menggunakan rilis tepat v4.1.2 resmi Sigstore komunitas
+      - name: Download SBOM
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          cosign-release: 'v2.2.4'
+          name: sbom-cyclonedx
 
-      - name: Login to DockerHub
+      - name: Load image into local daemon
+        run: docker load -i image.tar
+
+      - name: Login to Registry
         uses: step-security/docker-login-action@6aa05fe688caf2c58e784663f01b3415ced503e8 # v3.7.0
         with:
+          registry: ${{ secrets.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Sign Image
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.2
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Push (identical bytes) and capture DIGEST
+        id: push
         run: |
+          set -euo pipefail
           IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
           TAG="${GITHUB_SHA::7}"
-          echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key -y "$IMAGE_PATH:$TAG"
-          cosign public-key --key cosign.key --outfile cosign.pub
+
+          docker tag "${{ env.LOCAL_IMAGE }}" "$IMAGE_PATH:$TAG"
+          docker tag "${{ env.LOCAL_IMAGE }}" "$IMAGE_PATH:latest"
+          docker push "$IMAGE_PATH:$TAG"
+          docker push "$IMAGE_PATH:latest"
+
+          # Resolve the immutable digest from the registry (not the mutable tag).
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_PATH:$TAG" | cut -d'@' -f2)
+          if [ -z "$DIGEST" ]; then echo "❌ Could not resolve image digest"; exit 1; fi
+
+          echo "image=$IMAGE_PATH"            >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"                      >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST"                >> "$GITHUB_OUTPUT"
+          echo "ref=$IMAGE_PATH@$DIGEST"       >> "$GITHUB_OUTPUT"
+          echo "✅ Published $IMAGE_PATH@$DIGEST"
+
+      - name: Sign image BY DIGEST (keyless / OIDC)
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${{ steps.push.outputs.ref }}"
+
+      - name: Verify signature (proves provenance before promotion)
+        run: |
+          set -euo pipefail
+          cosign verify "${{ steps.push.outputs.ref }}" \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/.+@refs/heads/master$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            > /dev/null
+          echo "✅ Signature verified."
+
+      - name: Attest SBOM to the image digest (CycloneDX)
+        run: |
+          set -euo pipefail
+          cosign attest --yes --type cyclonedx \
+            --predicate trivy-sbom.json \
+            "${{ steps.push.outputs.ref }}"
+
+      - name: Verify SBOM attestation
+        run: |
+          set -euo pipefail
+          cosign verify-attestation --type cyclonedx \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/.+@refs/heads/master$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${{ steps.push.outputs.ref }}" > /dev/null
+          echo "✅ SBOM attestation verified."
+
+      - name: Publish digest to job summary
+        if: always()
+        run: |
           {
-            echo "### 🔑 Cosign Public Key"
-            echo '```'
-            cat cosign.pub
-            echo '```'
+            echo "### 📦 Published & Signed Artifact"
+            echo "- **Image:** \`${{ steps.push.outputs.image }}\`"
+            echo "- **Tag:** \`${{ steps.push.outputs.tag }}\`"
+            echo "- **Digest:** \`${{ steps.push.outputs.digest }}\`"
+            echo "- **Signing:** Keyless (Sigstore Fulcio + Rekor transparency log)"
+            echo "- **SBOM:** CycloneDX attested to the digest"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
-  # STAGE 4: DAST & ISSUE AUTOMATION
+  # STAGE 4: DAST  (reuses the exact scanned image — no 3rd rebuild)
   # =================================================================
   dast_zap_ci:
-    needs: [image_build_local_trivy_sarif]
+    needs: [build_scan]
     runs-on: ubuntu-latest
     name: 🎯 ZAP Baseline (CI)
     continue-on-error: true
@@ -286,29 +406,46 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Download built image (no rebuild)
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: app-image
 
-      - name: Build and Run App Container
+      - name: Load & run the scanned image
         run: |
-          docker build -t app-local-dast .
-          # Meneruskan port ke host agar ZAP container bisa mencapainya via bridge gateway (172.17.0.1)
-          docker run -d -p 3000:3000 -e OPENWEATHER_API_KEY="dummy" app-local-dast
-          sleep 25
+          set -euo pipefail
+          docker load -i image.tar
+          docker run -d --name app -p 3000:3000 \
+            -e OPENWEATHER_API_KEY="dummy" \
+            "${{ env.LOCAL_IMAGE }}"
+
+          # Readiness probe instead of a blind sleep.
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+              echo "App is up."; break
+            fi
+            sleep 2
+          done
+
+          # Resolve the Docker bridge gateway dynamically (no hardcoded 172.17.0.1),
+          # so the ZAP container can reach the published host port reliably.
+          HOST_GW=$(docker network inspect bridge -f '{{ (index .IPAM.Config 0).Gateway }}')
+          echo "ZAP_TARGET=http://${HOST_GW}:3000" >> "$GITHUB_ENV"
+
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
-          target: 'http://172.17.0.1:3000'
+          target: ${{ env.ZAP_TARGET }}
           issue_title: 'Security Vulnerability Found by ZAP'
           fail_action: false
 
   # =================================================================
-  # FINAL SUMMARY
+  # FINAL SUMMARY  (dynamic — reads the real outcome of each job)
   # =================================================================
   summary:
-    needs: [test_and_sast, security_audit, image_build_local_trivy_sarif, cosign_sign, dast_zap_ci]
+    needs: [test_and_sast, security_audit, build_scan, deliver_sign, dast_zap_ci]
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
@@ -319,13 +456,28 @@ jobs:
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
-      - name: Final Summary
+
+      - name: Build dynamic summary from real job outcomes
         run: |
+          icon() {
+            case "$1" in
+              success)   echo "✅" ;;
+              failure)   echo "❌" ;;
+              skipped)   echo "⏭️" ;;
+              cancelled) echo "🚫" ;;
+              *)         echo "❓" ;;
+            esac
+          }
           {
-            echo "## DevSecOps Pipeline — Final Production Status 🚀"
-            echo "- ✅ **Runtime:** Node 24 Hardened"
-            echo "- ✅ **Base:** Chainguard Minimal Image"
-            echo "- ✅ **Supply Chain:** Cosign Signed & SBOM Generated"
-            echo "- ✅ **Compliance:** License Whitelist Verified"
-            echo "- ✅ **DAST:** ZAP Automated Issue Monitoring"
+            echo "## DevSecOps Pipeline — Status"
+            echo ""
+            echo "| Stage | Result |"
+            echo "|---|---|"
+            echo "| 🧱 Test & SAST | $(icon '${{ needs.test_and_sast.result }}') ${{ needs.test_and_sast.result }} |"
+            echo "| 🧩 SCA / License / FS | $(icon '${{ needs.security_audit.result }}') ${{ needs.security_audit.result }} |"
+            echo "| 🧪 Build & Image Scan | $(icon '${{ needs.build_scan.result }}') ${{ needs.build_scan.result }} |"
+            echo "| 📦🔏 Deliver / Sign / Attest | $(icon '${{ needs.deliver_sign.result }}') ${{ needs.deliver_sign.result }} |"
+            echo "| 🎯 DAST (ZAP) | $(icon '${{ needs.dast_zap_ci.result }}') ${{ needs.dast_zap_ci.result }} |"
+            echo ""
+            echo "_Provenance: single build → scanned (fail-closed) → pushed by digest → signed-by-digest → verified → SBOM attested._"
           } >> "$GITHUB_STEP_SUMMARY"
