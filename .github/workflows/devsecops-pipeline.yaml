@@ -97,7 +97,7 @@ jobs:
       - name: SonarQube Cloud Scan
         # MIGRATED: sonarcloud-github-action was archived/deprecated (Oct 2025).
         # sonarqube-scan-action is the drop-in replacement and now requires SONAR_HOST_URL.
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e # v8.2.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
@@ -212,7 +212,7 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
+      - uses: step-security/setup-buildx-action@6997872a55d77391e51b87609556578131f44402 # v4.1.0
 
       - name: Build image ONCE (load into local daemon)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
@@ -314,7 +314,7 @@ jobs:
         run: docker load -i image.tar
 
       - name: Login to Registry
-        uses: step-security/docker-login-action@870af644803bf9f204aed474adbad2958fec048b # v4.1.0
+        uses: step-security/docker-login-action@164e21d7e52229904128e2f946001cb88278c33d # v4.2.0
         with:
           registry: ${{ secrets.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
