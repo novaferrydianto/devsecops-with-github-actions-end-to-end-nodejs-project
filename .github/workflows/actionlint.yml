@@ -28,14 +28,14 @@ jobs:
     timeout-minutes: 5
     steps:
       # ✅ Hardened: SHA Pinning untuk checkout
-      - name: Checkout Code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          persist-credentials: false
+          egress-policy: audit
 
+      - name: Checkout Code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v4.1.1
+        
       # ✅ Hardened & FIXED: Menggunakan action resmi reviewdog/action-actionlint
       - name: Run Actionlint
-        uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1
-        with:
-          reporter: github-check
-          fail_level: error
+        uses: step-security/action-actionlint@c3aa382d371c6b05513ae5907d4f77713e21813c # v1.72.0
