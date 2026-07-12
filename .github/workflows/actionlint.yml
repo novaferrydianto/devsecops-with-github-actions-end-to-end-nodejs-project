@@ -1,6 +1,11 @@
 name: 🚀 Lint Workflows (actionlint)
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/**.yml'
+      - '.github/workflows/**.yaml'
   pull_request:
     paths:
       - '.github/workflows/**.yml'
@@ -11,19 +16,26 @@ concurrency:
   group: actionlint-${{ github.ref }}
   cancel-in-progress: true
 
-# ✅ PoLP: Hanya butuh akses baca untuk melakukan linting
+# ✅ PoLP: Read repo content, write check annotations for reviewdog
 permissions:
   contents: read
+  checks: write
 
 jobs:
   actionlint:
     runs-on: ubuntu-latest
     name: 🧩 Check YAML Quality
+    timeout-minutes: 5
     steps:
       # ✅ Hardened: SHA Pinning untuk checkout
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
-        
+        with:
+          persist-credentials: false
+
       # ✅ Hardened & FIXED: Menggunakan action resmi reviewdog/action-actionlint
       - name: Run Actionlint
         uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1
+        with:
+          reporter: github-check
+          fail_level: error

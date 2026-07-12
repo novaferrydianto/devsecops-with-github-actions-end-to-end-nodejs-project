@@ -17,9 +17,6 @@ permissions:
 env:
   NODE_VERSION: 24
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  REGISTRY: ${{ secrets.REGISTRY }}
-  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   LOCAL_IMAGE_REPO: docker.io/${{ github.repository }}
   LOCAL_IMAGE_TAG: ${{ github.sha }}
 
@@ -34,6 +31,7 @@ jobs:
   test_and_sast:
     runs-on: ubuntu-latest
     name: 🧱 Test & SAST
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -74,6 +72,7 @@ jobs:
   security_audit:
     runs-on: ubuntu-latest
     name: 🧩 SCA, License & FS Audit
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -81,6 +80,15 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install report tooling
+        run: npm ci
 
       - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
@@ -99,13 +107,17 @@ jobs:
       - name: Generate Snyk HTML Report
         if: always()
         run: |
-          npx snyk-to-html -i snyk-report.json -o snyk-report.html
+          if [ -f snyk-report.json ]; then
+            npx --no-install snyk-to-html -i snyk-report.json -o snyk-report.html
+          else
+            echo "Snyk report missing; skip HTML generation."
+          fi
 
       - name: Enforce Security & Whitelist License Policy
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: always()
         run: |
           set -euo pipefail
-          if [ ! -f snyk-report.json ]; then echo "Snyk report missing"; exit 0; fi
+          if [ ! -f snyk-report.json ]; then echo "Snyk report missing"; exit 1; fi
           VULN_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-report.json)
           ALLOWED_REGEX="MIT|Apache-2.0|BSD-2-Clause|BSD-3-Clause|ISC"
           ILLEGAL_LICENSES=$(jq -r --arg ALLOWED "$ALLOWED_REGEX" '
@@ -129,13 +141,17 @@ jobs:
           scan-type: fs
           format: table
           output: trivy-report.txt
+          severity: CRITICAL,HIGH
+          exit-code: '1'
 
       - name: Upload Security Artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: security-reports
-          path: snyk-report.*
+          path: |
+            snyk-report.*
+            trivy-report.txt
 
 
 
@@ -146,6 +162,7 @@ jobs:
     needs: [test_and_sast, security_audit]
     runs-on: ubuntu-latest
     name: 🧪 Build & Image Scan
+    timeout-minutes: 25
     permissions:
       contents: read
       security-events: write
@@ -185,6 +202,24 @@ jobs:
           format: cyclonedx
           output: trivy-sbom.json
 
+      - name: Upload Container Artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: container-security-reports
+          path: |
+            trivy-results.sarif
+            trivy-sbom.json
+
+      - name: Trivy Image Gate
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.LOCAL_IMAGE_REPO }}:${{ env.LOCAL_IMAGE_TAG }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
   # =================================================================
   # STAGE 3: DELIVERY & SIGNING
   # =================================================================
@@ -193,17 +228,25 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 📦 Podman Build & Push
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install & Login Podman
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           sudo apt-get update && sudo apt-get install -y podman
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          echo "$DOCKERHUB_TOKEN" | podman login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
       - name: Build & Push
+        env:
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+          REGISTRY: ${{ secrets.REGISTRY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+          IMAGE_PATH="${REGISTRY}/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
           TAG="${GITHUB_SHA::7}"
           podman build -t "$IMAGE_PATH:$TAG" -t "$IMAGE_PATH:latest" .
           podman push "$IMAGE_PATH:$TAG"
@@ -214,6 +257,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     name: 🔏 Cosign Sign & Verify
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write 
@@ -225,19 +269,30 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Sign Image
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+          REGISTRY: ${{ secrets.REGISTRY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          IMAGE_PATH="${{ secrets.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.IMAGE_NAME }}"
+          IMAGE_PATH="${REGISTRY}/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
           TAG="${GITHUB_SHA::7}"
-          echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key -y "$IMAGE_PATH:$TAG"
-          cosign public-key --key cosign.key --outfile cosign.pub
+          cosign sign --yes "$IMAGE_PATH:$TAG"
+
+      - name: Verify Image Signature
+        env:
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+          REGISTRY: ${{ secrets.REGISTRY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          IMAGE_PATH="${REGISTRY}/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
+          TAG="${GITHUB_SHA::7}"
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/devsecops-pipeline.yaml@refs/heads/master" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$IMAGE_PATH:$TAG"
           {
-            echo "### 🔑 Cosign Public Key"
-            echo '```'
-            cat cosign.pub
-            echo '```'
+            echo "### Cosign Keyless Verification"
+            echo "- Image: \`$IMAGE_PATH:$TAG\`"
+            echo "- OIDC issuer: \`https://token.actions.githubusercontent.com\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # =================================================================
@@ -247,6 +302,7 @@ jobs:
     needs: [image_build_local_trivy_sarif]
     runs-on: ubuntu-latest
     name: 🎯 ZAP Baseline (CI)
+    timeout-minutes: 20
     continue-on-error: true
     permissions:
       contents: read
@@ -279,16 +335,26 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     name: 🧾 Summary
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
       - name: Final Summary
+        env:
+          TEST_STATUS: ${{ needs.test_and_sast.result }}
+          SECURITY_AUDIT_STATUS: ${{ needs.security_audit.result }}
+          IMAGE_SCAN_STATUS: ${{ needs.image_build_local_trivy_sarif.result }}
+          SIGNING_STATUS: ${{ needs.cosign_sign.result }}
+          DAST_STATUS: ${{ needs.dast_zap_ci.result }}
         run: |
           {
-            echo "## DevSecOps Pipeline — Final Production Status 🚀"
-            echo "- ✅ **Runtime:** Node 24 Hardened"
-            echo "- ✅ **Base:** Chainguard Minimal Image"
-            echo "- ✅ **Supply Chain:** Cosign Signed & SBOM Generated"
-            echo "- ✅ **Compliance:** License Whitelist Verified"
-            echo "- ✅ **DAST:** ZAP Automated Issue Monitoring"
+            echo "## DevSecOps Pipeline Status"
+            echo "- Runtime: Node 24"
+            echo "- Test & SAST: $TEST_STATUS"
+            echo "- SCA, License & FS Audit: $SECURITY_AUDIT_STATUS"
+            echo "- Image Scan & SBOM: $IMAGE_SCAN_STATUS"
+            echo "- Cosign Signing: $SIGNING_STATUS"
+            echo "- DAST: $DAST_STATUS"
+            echo ""
+            echo "Deployment/signing jobs are expected to be skipped outside push to master."
           } >> "$GITHUB_STEP_SUMMARY"
