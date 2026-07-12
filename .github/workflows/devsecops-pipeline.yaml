@@ -352,10 +352,12 @@ jobs:
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_PATH:$TAG" | cut -d'@' -f2)
           if [ -z "$DIGEST" ]; then echo "❌ Could not resolve image digest"; exit 1; fi
 
-          echo "image=$IMAGE_PATH"            >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"                      >> "$GITHUB_OUTPUT"
-          echo "digest=$DIGEST"                >> "$GITHUB_OUTPUT"
-          echo "ref=$IMAGE_PATH@$DIGEST"       >> "$GITHUB_OUTPUT"
+          {
+            echo "image=$IMAGE_PATH"
+            echo "tag=$TAG"
+            echo "digest=$DIGEST"
+            echo "ref=$IMAGE_PATH@$DIGEST"
+          } >> "$GITHUB_OUTPUT"
           echo "✅ Published $IMAGE_PATH@$DIGEST"
 
       - name: Sign image BY DIGEST (keyless / OIDC)
