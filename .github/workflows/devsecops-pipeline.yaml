@@ -91,9 +91,9 @@ jobs:
       - name: Install & Test
         run: |
           set -euo pipefail
-          npm ci
+          npm ci --ignore-scripts
           npm test
-          npx cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
+          ./node_modules/.bin/cross-env NODE_OPTIONS=--experimental-vm-modules npm run cover
 
       - name: SonarQube Cloud Scan
         # MIGRATED: sonarcloud-github-action was archived/deprecated (Oct 2025).
@@ -133,7 +133,7 @@ jobs:
           cache: npm
 
       - name: Install report tooling
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Gitleaks Secret Scan
         uses: step-security/gitleaks-action@678c692fa015502757d021ac74f2a42604bf2048 # v2.4.0
@@ -152,7 +152,7 @@ jobs:
       - name: Generate Snyk HTML Report
         if: always()
         run: |
-          npx snyk-to-html -i snyk-report.json -o snyk-report.html || true
+          ./node_modules/.bin/snyk-to-html -i snyk-report.json -o snyk-report.html || true
 
       - name: Enforce Security & Whitelist License Policy (FAIL-CLOSED)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -450,7 +450,9 @@ jobs:
           # Resolve the Docker bridge gateway dynamically (no hardcoded 172.17.0.1),
           # so the ZAP container can reach the published host port reliably.
           HOST_GW=$(docker network inspect bridge -f '{{ (index .IPAM.Config 0).Gateway }}')
-          echo "ZAP_TARGET=http://${HOST_GW}:3000" >> "$GITHUB_ENV"
+          # Internal Docker-bridge traffic to our own plain-HTTP test server (no TLS
+          # exists to scan) -- not a real endpoint, so cleartext here is expected.
+          echo "ZAP_TARGET=http://${HOST_GW}:3000" >> "$GITHUB_ENV" # NOSONAR
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
