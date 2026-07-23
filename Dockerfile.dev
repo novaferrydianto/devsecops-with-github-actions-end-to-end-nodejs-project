@@ -1,4 +1,5 @@
-FROM node:26-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66
+# Official Node.js image: node:26-alpine
+FROM node@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66
 
 WORKDIR /app
 
@@ -9,11 +10,17 @@ RUN apk upgrade --no-cache
 COPY package*.json ./
 
 # Install all dependencies including dev deps (pinned by hash in lockfile)
-RUN npm ci
+RUN npm ci --ignore-scripts
 
-# Copy source code
-COPY . .
+# Copy only the app source needed to run the dev server (no tests, docs,
+# CI config, or other repo content that isn't needed at runtime -- avoids
+# relying on .dockerignore alone to keep unrelated/sensitive files out).
+COPY app.js fetch-weather.js prepared-for-the-weather.js ./
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+USER nodejs
 
 EXPOSE 3000
 
-CMD ["npx", "nodemon", "--legacy-watch", "app.js"]
+CMD ["./node_modules/.bin/nodemon", "--legacy-watch", "app.js"]
