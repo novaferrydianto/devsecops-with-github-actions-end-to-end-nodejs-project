@@ -442,7 +442,7 @@ jobs:
           # Readiness probe instead of a blind sleep.
           for i in $(seq 1 30); do
             if curl -sf http://localhost:3000 >/dev/null 2>&1; then
-              echo "App is up."; break
+              echo "App is up (attempt $i)."; break
             fi
             sleep 2
           done
