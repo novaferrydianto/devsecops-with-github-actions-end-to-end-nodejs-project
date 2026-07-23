@@ -11,7 +11,7 @@ dotenv.config();
 import { fetchWeather } from './fetch-weather.js';
 import * as prepareForWeather from './prepared-for-the-weather.js';
 import commandLineArgs from 'command-line-args';
-import http from 'http';
+import http from 'node:http';
 
 import { fileURLToPath } from 'url';
 import path from 'path';
