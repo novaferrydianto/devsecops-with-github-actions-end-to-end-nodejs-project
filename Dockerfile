@@ -9,7 +9,7 @@ WORKDIR /app
 # ✅ FIX: Tambahkan --chown=node:node agar npm punya izin akses
 COPY --chown=node:node package.json package-lock.json ./
 
-RUN npm ci --include=dev
+RUN npm ci --include=dev --ignore-scripts
 
 # ✅ FIX: Pastikan source code juga dimiliki oleh user node
 COPY --chown=node:node . .
