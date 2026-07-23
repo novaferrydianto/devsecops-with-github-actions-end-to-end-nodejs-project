@@ -12,8 +12,10 @@ COPY package*.json ./
 # Install all dependencies including dev deps (pinned by hash in lockfile)
 RUN npm ci --ignore-scripts
 
-# Copy source code
-COPY . .
+# Copy only the app source needed to run the dev server (no tests, docs,
+# CI config, or other repo content that isn't needed at runtime -- avoids
+# relying on .dockerignore alone to keep unrelated/sensitive files out).
+COPY app.js fetch-weather.js prepared-for-the-weather.js ./
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
