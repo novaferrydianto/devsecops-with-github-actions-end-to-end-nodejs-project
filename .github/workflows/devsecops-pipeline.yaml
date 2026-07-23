@@ -435,23 +435,41 @@ jobs:
         run: |
           set -euo pipefail
           docker load -i image.tar
-          docker run -d --name app -p 3000:3000 \
+
+          # Trust boundary: this endpoint exists only on the ephemeral runner's
+          # local Docker bridge. Bind it to that interface instead of 0.0.0.0 so
+          # it is unreachable from the runner's other network interfaces.
+          HOST_GW="$(docker network inspect bridge \
+            --format '{{ (index .IPAM.Config 0).Gateway }}')"
+          readonly HOST_GW
+          if ! [[ "$HOST_GW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "::error::Docker bridge returned an invalid IPv4 gateway"
+            exit 1
+          fi
+
+          docker run -d --name app -p "${HOST_GW}:3000:3000" \
             -e OPENWEATHER_API_KEY="dummy" \
             "${{ env.LOCAL_IMAGE }}"
 
           # Readiness probe instead of a blind sleep.
+          READY=false
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3000 >/dev/null 2>&1; then
-              echo "App is up (attempt $i)."; break
+            if curl --fail --silent --show-error \
+              --max-time 2 "http://${HOST_GW}:3000" >/dev/null; then # NOSONAR
+              echo "App is up (attempt $i)."
+              READY=true
+              break
             fi
             sleep 2
           done
+          if [[ "$READY" != true ]]; then
+            echo "::error::App did not become ready for the ZAP scan"
+            docker logs app
+            exit 1
+          fi
 
-          # Resolve the Docker bridge gateway dynamically (no hardcoded 172.17.0.1),
-          # so the ZAP container can reach the published host port reliably.
-          HOST_GW=$(docker network inspect bridge -f '{{ (index .IPAM.Config 0).Gateway }}')
-          # Internal Docker-bridge traffic to our own plain-HTTP test server (no TLS
-          # exists to scan) -- not a real endpoint, so cleartext here is expected.
+          # Intentional cleartext: ZAP reaches only this bridge-bound, ephemeral
+          # test endpoint. No credentials or production data traverse the link.
           echo "ZAP_TARGET=http://${HOST_GW}:3000" >> "$GITHUB_ENV" # NOSONAR
 
       - name: ZAP Baseline Scan
