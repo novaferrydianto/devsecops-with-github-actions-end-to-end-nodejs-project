@@ -439,8 +439,9 @@ jobs:
           # Trust boundary: this endpoint exists only on the ephemeral runner's
           # local Docker bridge. Bind it to that interface instead of 0.0.0.0 so
           # it is unreachable from the runner's other network interfaces.
-          readonly HOST_GW="$(docker network inspect bridge \
+          HOST_GW="$(docker network inspect bridge \
             --format '{{ (index .IPAM.Config 0).Gateway }}')"
+          readonly HOST_GW
           if ! [[ "$HOST_GW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
             echo "::error::Docker bridge returned an invalid IPv4 gateway"
             exit 1
