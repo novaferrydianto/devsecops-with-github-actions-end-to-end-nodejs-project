@@ -13,8 +13,8 @@ import * as prepareForWeather from './prepared-for-the-weather.js';
 import commandLineArgs from 'command-line-args';
 import http from 'node:http';
 
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 // 🚀 Main logic wrapper for testability
 export async function run() {
