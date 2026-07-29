@@ -20,32 +20,31 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 ### Build & Quality
 - Node.js 24
 - Unit testing with Mocha, Chai, Sinon
-- 80%+ coverage via NYC
-- Clean code structure & linting
+- Enforced c8 coverage gate: 70% lines/functions/statements and 75% branches (80% target)
+- Sonar test execution import and a Quality Gate on every secret-backed ref, including pre-merge same-repo PRs
 
 ### DevSecOps Security Pipeline
 1. **Secret Scanning — Gitleaks**
    - Active protection against leaked tokens & credentials in commits.
 
 2. **SAST — SonarCloud**  
-   EN: Detects bugs & vulnerabilities  
-   ID: Analisis statis mendeteksi bug sejak awal
+   - Quality Gate berjalan pre-merge pada setiap ref yang bisa membaca Actions secrets (termasuk PR dari branch repo ini sendiri); di-skip untuk PR fork dan Dependabot, yang tidak punya akses token.
 
 3. **SCA — Snyk**  
-   Auto-fail untuk severity High/Critical
+   - Auto-fail High/Critical dengan cakupan ref yang sama; PR fork/Dependabot tetap digate oleh `npm audit`, license inventory, dan Trivy.
 
-4. **Container Security — Podman + Trivy**  
-   - Rootless container build  
+4. **Container Security — Docker Buildx / Podman + Trivy**
+   - CI single-build via Docker Buildx; rootless Podman tersedia untuk local runtime.
    - Automatically generates CycloneDX SBOM
    - Trivy filesystem & OS package scan
 
 5. **Supply Chain Security — Cosign**  
-   - **Image Signing**: Menjamin integritas image di registri.
-   - **Signed Releases**: Setiap rilis GitHub (`v*`) disertai tanda tangan digital asetnya.
+   - Keyless image signing and CycloneDX attestation by immutable digest.
+   - Full commit-SHA tag dipromosikan hanya setelah signature dan attestation terverifikasi.
 
 6. **DAST — OWASP ZAP**  
-   - Full dynamic scan & HTML/JSON reports.
-   - Auto-create GitHub Issues untuk temuan kerentanan.
+   - Pinned ZAP Baseline passive scan untuk `/`, `/health`, `/weather`, dan `/robots.txt`.
+   - WARN/FAIL findings menggagalkan promotion; report disimpan sebagai workflow artifacts.
 
 7. **Fuzz Testing — fast-check**  
    - Property-based testing untuk mendeteksi edge-case yang sulit ditemukan tes standar.
@@ -57,27 +56,31 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 ```
 .
 ├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   │   └── security-scan-fail.md
+│   ├── CODEOWNERS
+│   ├── dependabot.yml
 │   └── workflows/
 │       ├── actionlint.yml
+│       ├── codeql.yml
+│       ├── dependency-review.yml
 │       ├── devsecops-pipeline.yaml
-│       ├── secret-scanner.yaml
 │       ├── release.yml
-│       └── dependabot.yml
-│
-├── CHANGELOG.md
-├── SECURITY.md
-├── README.md
+│       ├── scorecard.yml
+│       ├── secret-scanner.yaml
+│       └── security-self-healing.yml
+├── .zap/
+│   └── rules.tsv
+├── scripts/
+│   ├── check-licenses.js
+│   └── coverage-makeover.js
 ├── test-data/
 │   ├── sample-data.js
 │   └── sample-weather-raw.json
-│
 ├── test/
-│   ├── app.test.js
-│   ├── fetch-weather.test.js
-│   └── prepared-for-the-weather.test.js
-│
+│   ├── app.integration.test.js
+│   ├── fetch-weather-helper-test.js
+│   ├── fuzz-test.js
+│   ├── preparing-data-test.js
+│   └── weather-kit-test.js
 ├── .dockerignore
 ├── .gitignore
 ├── Dockerfile
@@ -85,12 +88,9 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
 ├── podman-compose.yml
 ├── app.js
 ├── fetch-weather.js
-├── fix-mocha-exit.js
 ├── prepared-for-the-weather.js
-├── nyc.config.json
 ├── package.json
-├── package-lock.json
-└── xunit.xml
+└── package-lock.json
 ```
 
 ---
@@ -108,7 +108,6 @@ podman run -d \
   --cpus=0.5 \
   --read-only \
   --security-opt no-new-privileges \
-  -e AIKIDO_BLOCK=true \
   weather-app
 ```
 
@@ -124,7 +123,6 @@ podman run -d -p 3000:3000 \
   --cpus=0.5 \
   --read-only \
   --security-opt no-new-privileges \
-  -e AIKIDO_BLOCK=true \
   weather-app
 ```
 
@@ -164,26 +162,22 @@ App running at: http://localhost:3000
 | Fuzzing | fast-check | Property-based testing |
 | SBOM | Trivy | Software Bill of Materials (CycloneDX) |
 | Container Scan | Trivy | OS & FS vulnerability scan |
-| Signing | Cosign | Image & Release signature |
-| DAST | OWASP ZAP | Runtime penetration testing |
+| Signing | Cosign | Keyless image signature + SBOM attestation |
+| DAST | OWASP ZAP | Passive baseline scan across explicit routes |
 
 ---
 
 ## 🌐 CI/CD Pipeline Flow
 
 ```
-1. Checkout source code
-2. Secret Scan (Gitleaks)
-3. Install dependencies
-4. Unit Tests + Coverage
-5. SonarCloud SAST Scan
-6. Snyk SCA Scan
-7. Podman rootless image build
-8. Generate SBOM (Trivy CycloneDX)
-9. Trivy container scan
-10. Cosign image signing
-11. OWASP ZAP DAST scan
-12. Upload reports + GitHub Summary
+1. Checkout + clean dependency install
+2. Unit tests, c8 coverage gate, npm audit, lockfile license inventory, Gitleaks
+3. SonarCloud + Snyk on every secret-backed ref, incl. same-repo PRs (skipped for fork PRs and Dependabot)
+4. Docker Buildx single image build
+5. Trivy filesystem/image gates + CycloneDX SBOM
+6. Four-route OWASP ZAP Baseline matrix (WARN/FAIL enforcing)
+7. Master push only: stage image, sign/verify, attest/verify, promote full-SHA tag
+8. Enforcing aggregate GitHub Summary
 ```
 
 ---

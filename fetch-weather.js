@@ -5,6 +5,10 @@
  */
 
 const APP_ID = process.env.OPENWEATHER_API_KEY;
+const configuredTimeout = Number(process.env.OPENWEATHER_TIMEOUT_MS ?? 10000);
+const REQUEST_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+  ? configuredTimeout
+  : 10000;
 
 if (!APP_ID) {
   throw new Error("CRITICAL STARTUP ERROR: OPENWEATHER_API_KEY environment variable is missing.");
@@ -21,7 +25,9 @@ export async function fetchWeather(location) {
   const url = `https://api.openweathermap.org/data/2.5/weather?q=${safeLocation}&appid=${APP_ID}`;
 
   try {
-    const res = await fetchFn(url);
+    const res = await fetchFn(url, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
     if (!res || !res.ok) {
       throw new Error(`HTTP error! Status: ${res?.status ?? "Unknown"}`);
     }

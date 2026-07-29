@@ -35,7 +35,14 @@ jobs:
 
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         
       # ✅ Hardened & FIXED: Menggunakan action resmi reviewdog/action-actionlint
       - name: Run Actionlint
         uses: step-security/action-actionlint@c3aa382d371c6b05513ae5907d4f77713e21813c # v1.72.0
+        with:
+          # reviewdog defaults `fail_level: none`, which means "always exit 0" —
+          # findings would only ever appear as annotations and this job would
+          # stay green with broken workflows. Make it an actual gate.
+          fail_level: error

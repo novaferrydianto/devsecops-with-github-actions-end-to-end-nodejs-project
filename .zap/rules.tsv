@@ -1,0 +1,8 @@
+# Unlisted WARN and reviewed FAIL findings block; only documented IGNORE exceptions do not.
+10015	FAIL	(Cache-Control must be explicit on every response)
+10019	FAIL	(Content-Type header must be present)
+10020	FAIL	(X-Frame-Options must be present)
+10021	FAIL	(X-Content-Type-Options must be present)
+10038	FAIL	(Content-Security-Policy header must be present)
+10055	FAIL	(Content-Security-Policy must not be weak or malformed)
+10035	IGNORE	(Ephemeral bridge-only DAST target is intentionally plain HTTP)

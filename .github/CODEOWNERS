@@ -9,6 +9,8 @@
 # 2. CI/CD Pipeline (Extremely Sensitive)
 # Perubahan pada alur kerja GitHub Actions wajib di-review ketat
 /.github/workflows/    @novaferrydianto
+/.github/dependabot.yml @novaferrydianto
+/.zap/                 @novaferrydianto
 
 # 3. Container & Infrastructure
 # Dockerfile dan script build adalah target utama supply chain attack
@@ -32,4 +34,3 @@
 # Konfigurasi scan dan audit
 /SECURITY.md           @novaferrydianto
 /sonar-project.properties @novaferrydianto
-/nyc.config.json       @novaferrydianto

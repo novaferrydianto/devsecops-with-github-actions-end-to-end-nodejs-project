@@ -36,6 +36,10 @@ describe("Weather data processing", function () {
     const result = await fetchWeather("London");
     console.table(result);
 
+    const [, requestOptions] = fetchStub.firstCall.args;
+    expect(requestOptions.signal).to.be.instanceOf(AbortSignal);
+    expect(requestOptions.signal.aborted).to.equal(false);
+
     expect(result).to.include.all.keys([
       "minTemp",
       "maxTemp",
