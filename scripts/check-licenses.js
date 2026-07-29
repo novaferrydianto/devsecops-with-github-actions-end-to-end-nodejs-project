@@ -1,11 +1,6 @@
 import fs from 'node:fs';
-
-const lockfile = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-const packages = lockfile.packages;
-
-if (!packages || typeof packages !== 'object') {
-  throw new Error('package-lock.json does not contain a packages inventory');
-}
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const allowedLicenses = new Set([
   'MIT',
@@ -26,11 +21,11 @@ const pathSpecificExceptions = new Map([
   ['node_modules/argparse', 'Python-2.0'],
 ]);
 
-function normalizeLicense(license) {
+export function normalizeLicense(license) {
   return aliases.get(license) ?? license;
 }
 
-function isAllowedLicense(packagePath, license) {
+export function isAllowedLicense(packagePath, license) {
   const normalized = normalizeLicense(license);
 
   if (allowedLicenses.has(normalized)) {
@@ -54,38 +49,63 @@ function isAllowedLicense(packagePath, license) {
   return false;
 }
 
-const counts = new Map();
-const violations = [];
-
-for (const [packagePath, metadata] of Object.entries(packages)) {
-  if (packagePath === '') {
-    continue;
+export function auditLicenseInventory(packages) {
+  if (!packages || typeof packages !== 'object' || Array.isArray(packages)) {
+    throw new Error('package-lock.json does not contain a packages inventory');
   }
 
-  const license = metadata.license;
-  if (typeof license !== 'string' || license.trim() === '') {
-    violations.push(`${packagePath}: missing license metadata`);
-    continue;
+  const counts = new Map();
+  const violations = [];
+
+  for (const [packagePath, metadata] of Object.entries(packages)) {
+    if (packagePath === '') {
+      continue;
+    }
+
+    const license = metadata.license;
+    if (typeof license !== 'string' || license.trim() === '') {
+      violations.push(`${packagePath}: missing license metadata`);
+      continue;
+    }
+
+    counts.set(license, (counts.get(license) ?? 0) + 1);
+
+    if (!isAllowedLicense(packagePath, license)) {
+      violations.push(`${packagePath}: ${license}`);
+    }
   }
 
-  counts.set(license, (counts.get(license) ?? 0) + 1);
-
-  if (!isAllowedLicense(packagePath, license)) {
-    violations.push(`${packagePath}: ${license}`);
-  }
+  return { counts, violations };
 }
 
-if (violations.length > 0) {
-  console.error('Disallowed or unreviewed dependency licenses:');
-  for (const violation of violations) {
-    console.error(`- ${violation}`);
-  }
-  process.exitCode = 1;
-} else {
-  const summary = [...counts.entries()]
+export function formatLicenseSummary(counts) {
+  return [...counts.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([license, count]) => `${license}=${count}`)
     .join(', ');
+}
 
-  console.log(`Dependency license inventory passed (${summary}).`);
+export function reportLicenseInventory({ counts, violations }, logger = console) {
+  if (violations.length > 0) {
+    logger.error('Disallowed or unreviewed dependency licenses:');
+    for (const violation of violations) {
+      logger.error(`- ${violation}`);
+    }
+    return false;
+  }
+
+  logger.log(`Dependency license inventory passed (${formatLicenseSummary(counts)}).`);
+  return true;
+}
+
+export function runLicenseCheck(lockfilePath = 'package-lock.json', logger = console) {
+  const lockfile = JSON.parse(fs.readFileSync(lockfilePath, 'utf8'));
+  return reportLicenseInventory(auditLicenseInventory(lockfile.packages), logger);
+}
+
+const invokedPath = process.argv[1];
+if (invokedPath && import.meta.url === pathToFileURL(path.resolve(invokedPath)).href) {
+  if (!runLicenseCheck()) {
+    process.exitCode = 1;
+  }
 }
