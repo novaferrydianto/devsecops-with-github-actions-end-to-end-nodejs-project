@@ -7,7 +7,7 @@ Guidance for Claude Code (and humans) working in this repository.
 A **DevSecOps reference implementation**: a small Node.js weather app whose real product is the *secure software-supply-chain pipeline* around it. When making changes, treat the security pipeline as a first-class part of the codebase — a change that breaks a security gate is a broken change, even if the app still runs.
 
 - **Runtime:** Node.js `>=24`, **ESM only** (`"type": "module"`).
-- **App:** a CLI + minimal `http` server (`/`, `/health`, `/weather`, `/robots.txt`) that fetches OpenWeather data and prints "what to prepare for" recommendations.
+- **App:** a CLI + minimal HTTP/optional-HTTPS server (`/`, `/health`, `/weather`, `/robots.txt`) that fetches OpenWeather data and prints "what to prepare for" recommendations.
 
 ## Commands
 
@@ -28,7 +28,7 @@ Source lives at the repo **root** (there is no `src/`):
 
 | File | Role |
 |---|---|
-| `app.js` | Entry point. Exports `run`, `startServer`, `shutdown` for testability; only calls `server.listen` when `NODE_ENV !== 'test'`. Sets security headers on every response. |
+| `app.js` | Entry point. Exports `run`, `startServer`, `loadTlsOptions`, and `shutdown` for testability; only calls `server.listen` when `NODE_ENV !== 'test'`. Sets security headers on every response and enables TLS only when both certificate paths are present. |
 | `fetch-weather.js` | OpenWeather fetch + pure helpers (`kelvinToCelsius`, `getVolume`, `processResults`). Prefers a global `fetch` stub (tests) and falls back to `node-fetch`. |
 | `prepared-for-the-weather.js` | `doINeed.*` recommendation predicates (umbrella, suncream, etc.). |
 | `scripts/coverage-makeover.js` | Post-coverage cosmetic step that restyles the HTML report. |
@@ -38,7 +38,7 @@ Source lives at the repo **root** (there is no `src/`):
 ## Conventions
 
 - **ESM everywhere.** Use `import`/`export` with explicit `.js` extensions. No `require`, no CommonJS.
-- **Env-driven config, never hardcoded secrets.** `OPENWEATHER_API_KEY` is **required** — `fetch-weather.js` throws at import time if it is missing. Other vars: `OPENWEATHER_TIMEOUT_MS` (default `10000`), `DEFAULT_LOCATION`, `PORT` (default `3000`), and `NODE_ENV`. `.env` is gitignored; tests inject a dummy key via `cross-env`.
+- **Env-driven config, never hardcoded secrets.** `OPENWEATHER_API_KEY` is **required** — `fetch-weather.js` throws at import time if it is missing. Other vars: `OPENWEATHER_TIMEOUT_MS` (default `10000`), `DEFAULT_LOCATION`, `PORT` (default `3000`), and `NODE_ENV`. Optional TLS requires `TLS_CERT_PATH` and `TLS_KEY_PATH` together and fails closed if only one is set. `.env` is gitignored; tests inject a dummy key via `cross-env`.
 - **Security headers** are set on every HTTP response in `startServer` (CSP, `X-Content-Type-Options`, HSTS, etc.). Keep them when touching the server.
 - `// NOSONAR` comments on `console.*` lines are intentional SonarCloud suppressions — leave them.
 - **Coverage is `c8`**, configured in the `c8` block of `package.json` (that block is authoritative). `test/mocha.opts` is a legacy leftover — don't rely on it.

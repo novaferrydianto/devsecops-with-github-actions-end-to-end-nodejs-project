@@ -11,7 +11,9 @@ dotenv.config();
 import { fetchWeather } from './fetch-weather.js';
 import * as prepareForWeather from './prepared-for-the-weather.js';
 import commandLineArgs from 'command-line-args';
+import { readFileSync } from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -71,11 +73,12 @@ function printLine(required, text) {
   console.info(required ? `✔ ${text}`.green : `✖ ${text}`.red); // NOSONAR
 }
 
-// 🌐 Basic HTTP server (for DAST / ZAP)
+// 🌐 Basic HTTP/HTTPS server (for DAST / ZAP)
 export function startServer(today, location = 'London', kit = {}) {
   const PORT = process.env.PORT || 3000;
+  const noStore = 'no-store, no-cache, must-revalidate, proxy-revalidate';
 
-  const server = http.createServer((req, res) => {
+  const handleRequest = (req, res) => {
     // Modern basic security headers (DevSecOps Hardened)
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -87,40 +90,62 @@ export function startServer(today, location = 'London', kit = {}) {
     res.setHeader('X-XSS-Protection', '1; mode=block');
 
     if (req.url === '/health') {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Cache-Control', noStore);
       return json(res, { status: 'ok', message: '🛡️ Healthy and secure!' });
     }
 
     if (req.url === '/weather') {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Cache-Control', noStore);
       return json(res, { location, weather: today, recommendations: kit });
     }
 
     if (req.url === '/robots.txt') {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Cache-Control', noStore);
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('User-agent: *\nDisallow: /\n');
     }
 
     if (req.url === '/') {
-      res.setHeader('Cache-Control', 'public, max-age=600');
+      res.setHeader('Cache-Control', noStore);
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('✅ Weather app running — ready for ZAP scan!\n');
     }
 
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', noStore);
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('❌ 404 Not Found\n');
-  });
+  };
+
+  const tlsOptions = loadTlsOptions();
+  const protocol = tlsOptions ? 'https' : 'http';
+  const server = tlsOptions
+    ? https.createServer(tlsOptions, handleRequest)
+    : http.createServer(handleRequest);
 
   // Only listen if not in test environment or if explicitly called to listen
   if (process.env.NODE_ENV !== 'test') {
     server.listen(PORT, '0.0.0.0', () => {
-      console.info(`\n🌦️ App running securely at http://0.0.0.0:${PORT}`.yellow); // NOSONAR
+      console.info(`\n🌦️ App running securely at ${protocol}://0.0.0.0:${PORT}`.yellow); // NOSONAR
     });
   }
 
   return server;
+}
+
+export function loadTlsOptions(env = process.env, readFile = readFileSync) {
+  const certPath = env.TLS_CERT_PATH?.trim();
+  const keyPath = env.TLS_KEY_PATH?.trim();
+
+  if (!certPath && !keyPath) return undefined;
+  if (!certPath || !keyPath) {
+    throw new Error('TLS_CERT_PATH and TLS_KEY_PATH must be set together');
+  }
+
+  return {
+    cert: readFile(certPath),
+    key: readFile(keyPath),
+    minVersion: 'TLSv1.2',
+  };
 }
 
 function json(res, obj) {

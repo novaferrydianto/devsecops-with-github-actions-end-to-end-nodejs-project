@@ -903,22 +903,46 @@ jobs:
             echo "::error::Docker bridge returned an invalid IPv4 gateway"
             exit 1
           fi
-          # Intentional cleartext: ZAP reaches only this bridge-bound, ephemeral
-          # test endpoint. No credentials or production data traverse the link.
-          # Keep the reviewed exception local instead of disabling this Sonar
-          # rule for every URL in the workflow.
-          readonly ZAP_SCHEME='http'
-          readonly ZAP_ORIGIN="${ZAP_SCHEME}://${HOST_GW}:3000"
+
+          # Generate a short-lived certificate for this isolated DAST endpoint.
+          # The private key is readable only by the image's configured runtime
+          # UID/GID and disappears with the ephemeral runner.
+          readonly TLS_DIR="${RUNNER_TEMP}/zap-tls"
+          readonly TLS_CERT="${TLS_DIR}/server.crt"
+          readonly TLS_KEY="${TLS_DIR}/server.key"
+          install -d -m 0755 "$TLS_DIR"
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
+            -subj "/CN=${HOST_GW}" \
+            -addext "subjectAltName=IP:${HOST_GW}" \
+            -keyout "$TLS_KEY" \
+            -out "$TLS_CERT"
+
+          APP_OWNER="$(docker run --rm --entrypoint /usr/bin/node \
+            "${{ env.LOCAL_IMAGE }}" \
+            -e 'process.stdout.write(`${process.getuid()}:${process.getgid()}`)')"
+          readonly APP_OWNER
+          if ! [[ "$APP_OWNER" =~ ^[0-9]+:[0-9]+$ ]]; then
+            echo "::error::Image returned an invalid runtime UID/GID"
+            exit 1
+          fi
+          chmod 0444 "$TLS_CERT"
+          chmod 0400 "$TLS_KEY"
+          sudo chown "$APP_OWNER" "$TLS_CERT" "$TLS_KEY"
+          readonly ZAP_ORIGIN="https://${HOST_GW}:3000"
 
           docker run -d --name app -p "${HOST_GW}:3000:3000" \
+            -v "${TLS_DIR}:/run/tls:ro" \
             -e OPENWEATHER_API_KEY="dummy" \
             -e OPENWEATHER_TIMEOUT_MS="3000" \
+            -e TLS_CERT_PATH="/run/tls/server.crt" \
+            -e TLS_KEY_PATH="/run/tls/server.key" \
             "${{ env.LOCAL_IMAGE }}"
 
           # Readiness probe instead of a blind sleep.
           READY=false
           for i in $(seq 1 30); do
             if curl --fail --silent --show-error \
+              --cacert "$TLS_CERT" \
               --max-time 2 "$ZAP_ORIGIN" >/dev/null; then
               echo "App is up (attempt $i)."
               READY=true

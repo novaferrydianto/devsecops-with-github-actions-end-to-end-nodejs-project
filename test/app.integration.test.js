@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { expect } from 'chai';
-import { startServer } from '../app.js';
+import { loadTlsOptions, startServer } from '../app.js';
 
 describe('🚀 Integration Test: app.js', () => {
     let server;
@@ -73,6 +73,42 @@ describe('🚀 Integration Test: app.js', () => {
             expect(headers['referrer-policy']).to.equal('no-referrer');
             expect(headers['permissions-policy']).to.contain('geolocation=()');
             expect(headers['x-xss-protection']).to.equal('1; mode=block');
+        });
+
+        it('should prevent caching on every response class', async () => {
+            for (const route of ['/', '/health', '/weather', '/robots.txt', '/unknown-path']) {
+                const res = await request(server).get(route);
+                expect(res.header['cache-control']).to.contain('no-store');
+            }
+        });
+    });
+
+    describe('🔐 TLS configuration', () => {
+        it('should keep local development on HTTP when TLS is not configured', () => {
+            expect(loadTlsOptions({})).to.equal(undefined);
+        });
+
+        it('should fail closed when only one TLS path is configured', () => {
+            expect(() => loadTlsOptions({ TLS_CERT_PATH: 'cert.pem' }))
+                .to.throw('TLS_CERT_PATH and TLS_KEY_PATH must be set together');
+            expect(() => loadTlsOptions({ TLS_KEY_PATH: 'key.pem' }))
+                .to.throw('TLS_CERT_PATH and TLS_KEY_PATH must be set together');
+        });
+
+        it('should load both TLS files and require TLS 1.2 or newer', () => {
+            const reads = [];
+            const tlsOptions = loadTlsOptions(
+                { TLS_CERT_PATH: ' cert.pem ', TLS_KEY_PATH: ' key.pem ' },
+                (filePath) => {
+                    reads.push(filePath);
+                    return Buffer.from(filePath);
+                }
+            );
+
+            expect(reads).to.deep.equal(['cert.pem', 'key.pem']);
+            expect(tlsOptions.cert.toString()).to.equal('cert.pem');
+            expect(tlsOptions.key.toString()).to.equal('key.pem');
+            expect(tlsOptions.minVersion).to.equal('TLSv1.2');
         });
     });
 });
