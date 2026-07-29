@@ -1,0 +1,9 @@
+# Unlisted WARN and reviewed FAIL findings block; only documented IGNORE exceptions do not.
+10015	FAIL	(Responses must prevent storage by shared or browser caches)
+10019	FAIL	(Content-Type header must be present)
+10020	FAIL	(X-Frame-Options must be present)
+10021	FAIL	(X-Content-Type-Options must be present)
+10035	FAIL	(Strict-Transport-Security must be present on the TLS endpoint)
+10038	FAIL	(Content-Security-Policy header must be present)
+10049	IGNORE	(Non-storable responses are the intentional cache-safety policy)
+10055	FAIL	(Content-Security-Policy must not be weak or malformed)

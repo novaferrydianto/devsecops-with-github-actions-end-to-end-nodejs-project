@@ -13,6 +13,7 @@ jobs:
   build_and_release:
     name: 🏗️ Build & Signed Release
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write # Untuk membuat GitHub Release & mengunggah aset
       id-token: write # Untuk otentikasi Sigstore/Cosign ke Fulcio
@@ -29,6 +30,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Cosign
         uses: step-security/cosign-installer@7d5ca7d0ecba292387fa6f81cde2c05e53a2a6d7 # v4.1.2

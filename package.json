@@ -9,14 +9,14 @@
   "scripts": {
     "dev": "node app.js",
     "start": "node app.js",
-    "start:secure": "AIKIDO_BLOCK=true node app.js",
     "test": "cross-env NODE_ENV=test OPENWEATHER_API_KEY=test-api-token mocha --reporter mocha-sonarqube-reporter --reporter-options output=xunit.xml test --exit",
-    "cover": "cross-env NODE_ENV=test OPENWEATHER_API_KEY=test-api-token c8 --reporter=text --reporter=lcov --reporter=html mocha --exit",
-    "precover": "rimraf .nyc_output coverage",
+    "cover": "cross-env NODE_ENV=test OPENWEATHER_API_KEY=test-api-token NODE_OPTIONS=--experimental-vm-modules c8 --reporter=text --reporter=lcov --reporter=html mocha --reporter mocha-sonarqube-reporter --reporter-options output=xunit.xml --exit",
+    "licenses": "node scripts/check-licenses.js",
+    "precover": "rimraf coverage xunit.xml",
     "postcover": "node scripts/coverage-makeover.js"
   },
   "author": "Nova Ferrydianto <novaferrydianto@gmail.com>",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "c8": "^11.0.0",
     "chai": "^6.2.2",
@@ -34,7 +34,6 @@
     "supertest": "^7.2.2"
   },
   "dependencies": {
-    "@aikidosec/firewall": "^1.8.35",
     "colors": "^1.4.0",
     "command-line-args": "^6.0.2",
     "dotenv": "^17.4.2",
@@ -44,7 +43,8 @@
     "all": true,
     "include": [
       "*.js",
-      "src/**/*.js"
+      "src/**/*.js",
+      "scripts/check-licenses.js"
     ],
     "exclude": [
       "test/**",
@@ -57,17 +57,21 @@
       "html"
     ],
     "report-dir": "coverage",
-    "all-files": true
+    "all-files": true,
+    "check-coverage": true,
+    "lines": 70,
+    "functions": 70,
+    "branches": 75,
+    "statements": 70
   },
   "overrides": {
-    "serialize-javascript": "^7.0.3",
-    "uuid": "^11.1.1",
+    "brace-expansion": "5.0.8",
+    "minimatch": "10.2.6",
+    "serialize-javascript": "7.0.7",
+    "uuid": "11.1.1",
     "mocha": {
-      "diff": "^8.0.4",
-      "minimatch": {
-        ".": "^9.0.6",
-        "brace-expansion": "^2.0.3"
-      }
+      "diff": "8.0.4",
+      "js-yaml": "5.2.2"
     }
   }
 }
