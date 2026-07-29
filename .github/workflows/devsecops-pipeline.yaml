@@ -903,6 +903,12 @@ jobs:
             echo "::error::Docker bridge returned an invalid IPv4 gateway"
             exit 1
           fi
+          # Intentional cleartext: ZAP reaches only this bridge-bound, ephemeral
+          # test endpoint. No credentials or production data traverse the link.
+          # Keep the reviewed exception local instead of disabling this Sonar
+          # rule for every URL in the workflow.
+          readonly ZAP_SCHEME='http'
+          readonly ZAP_ORIGIN="${ZAP_SCHEME}://${HOST_GW}:3000"
 
           docker run -d --name app -p "${HOST_GW}:3000:3000" \
             -e OPENWEATHER_API_KEY="dummy" \
@@ -913,7 +919,7 @@ jobs:
           READY=false
           for i in $(seq 1 30); do
             if curl --fail --silent --show-error \
-              --max-time 2 "http://${HOST_GW}:3000" >/dev/null; then # NOSONAR
+              --max-time 2 "$ZAP_ORIGIN" >/dev/null; then
               echo "App is up (attempt $i)."
               READY=true
               break
@@ -926,9 +932,7 @@ jobs:
             exit 1
           fi
 
-          # Intentional cleartext: ZAP reaches only this bridge-bound, ephemeral
-          # test endpoint. No credentials or production data traverse the link.
-          echo "ZAP_TARGET=http://${HOST_GW}:3000${ZAP_ROUTE}" >> "$GITHUB_ENV" # NOSONAR
+          printf 'ZAP_TARGET=%s%s\n' "$ZAP_ORIGIN" "$ZAP_ROUTE" >> "$GITHUB_ENV"
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
