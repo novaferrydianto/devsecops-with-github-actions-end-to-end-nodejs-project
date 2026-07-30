@@ -16,16 +16,18 @@ concurrency:
   group: actionlint-${{ github.ref }}
   cancel-in-progress: true
 
-# ✅ PoLP: Read repo content, write check annotations for reviewdog
+# ✅ PoLP: Global lockdown to read-only
 permissions:
   contents: read
-  checks: write
 
 jobs:
   actionlint:
     runs-on: ubuntu-latest
     name: 🧩 Check YAML Quality
     timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
     steps:
       # ✅ Hardened: SHA Pinning untuk checkout
       - name: Harden the runner (Audit all outbound calls)
