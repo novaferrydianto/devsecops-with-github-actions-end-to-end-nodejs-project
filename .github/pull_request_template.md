@@ -1,42 +1,45 @@
 ## 📝 Description
-Fixes #(issue_number)
+Fixes #
+
+<!-- Summarize the changes and the rationale behind them -->
 
 ## 🎯 Type of Change
 - [ ] ✨ Feat (New feature)
 - [ ] 🐛 Fix (Bug fix)
-- [ ] 🧹 Chore (Refactoring, dependencies, etc)
-- [ ] 🛡️ Security (Security patches)
-- [ ] 🏗️ IaC/Infra (Terraform, K8s manifests, CI/CD)
+- [ ] 🛡️ Security (Security patches / dependency audit)
+- [ ] 🧹 Chore (Refactoring, dependencies, etc.)
+- [ ] 🏗️ IaC/Infra (Docker, GitHub Actions, CI/CD)
 - [ ] 📖 Docs (Documentation changes)
 
 ## 🔍 Proposed Changes
-- [ ] List of specific changes...
-- [ ] List of specific changes...
+- [ ] 
 
 ## 🛡️ DevSecOps & Quality Checklist
-- [ ] **Linting & Formatting**: Code follows the project's style guide.
-- [ ] **Security Scanning**: No high/critical vulnerabilities found (Snyk/Trivy/SonarQube).
-- [ ] **Secrets**: No hardcoded secrets or credentials included.
-- [ ] **IaC Validation**: `terraform plan` or `tofu plan` shows expected changes (if applicable).
-- [ ] **Tests**: Unit tests or Integration tests passed.
-- [ ] **Documentation**: Updated README or internal docs if necessary.
+- [ ] **Linting & Formatting**: Code passes pre-commit / style guide rules.
+- [ ] **Security Scanning**: No high/critical vulnerabilities found (`npm audit`, Trivy/Snyk/SonarQube).
+- [ ] **Secrets**: No hardcoded secrets, API keys, or credentials included.
+- [ ] **Tests**: `npm test` passed successfully.
+- [ ] **Documentation**: Updated `README.md` or internal docs if necessary.
 
 ## 🧪 How Has This Been Tested?
-- **Test Environment**: [e.g., Local Podman, GKE Staging, etc.]
-- **Test Command**: `make test` or `go test ./...`
-- **Result**: [Attach screenshots or logs if relevant]
+- **Test Environment**: [e.g., Local Node.js v24, Docker/Podman container]
+- **Test Command**: `npm test` or `npm run cover`
+- **Result**: [Attach screenshots, test summary, or logs if relevant]
 
 ## 📸 Screenshots / Logs (Optional)
+
 ## 🚩 Risk Assessment
 - **Downtime**: [Yes/No]
 - **Migration Required**: [Yes/No]
-- **Rollback Plan**: ```
+- **Rollback Plan**:
+```bash
+# Add rollback steps here if applicable
+```
 
-### **Result**
-Dengan menggunakan template ini, tim Anda akan mendapatkan manfaat berikut:
-1.  **Standardisasi**: Setiap PR memiliki struktur yang sama, memudahkan Senior Engineer melakukan *review*.
-2.  **Keamanan Terjamin**: Checklist keamanan memaksa developer untuk memeriksa *vulnerabilities* sebelum melakukan *merge*.
-3.  **Audit Trail**: Memiliki catatan yang jelas mengenai bagaimana fitur diuji dan apa rencana *rollback*-nya jika terjadi insiden (SRE Best Practice).
-4.  **Efficiency**: Mengurangi *back-and-forth* antara reviewer dan author karena informasi sudah lengkap di awal.
-
-**Pro-tip from SRE Perspective:** Jika Anda menggunakan **Terragrunt/OpenTofu**, pastikan untuk selalu melampirkan output `plan` di bagian "Screenshots / Logs" agar reviewer bisa memvalidasi perubahan *state* tanpa harus menjalankan command secara manual.
+<!-- 
+GUIDANCE FOR AUTHOR:
+Benefits of this template:
+1. Standardized PR structure for easier review.
+2. Security checklist ensures vulnerability checks before merge.
+3. Clear audit trail and rollback plan (SRE Best Practice).
+-->
