@@ -684,16 +684,19 @@ jobs:
         # commit-SHA tag is never touched.
         #
         # Endpoint choices, checked against Docker Hub's published OpenAPI spec:
-        #   * Auth uses the documented POST /v2/auth/token ({identifier, secret}
-        #     -> access_token), the PAT-oriented flow. Only an explicit 404/405
-        #     falls back to the older POST /v2/users/login
-        #     ({username, password} -> token). Authentication errors, rate limits,
-        #     server errors and transport failures remain fail-closed.
+        #   * Verification reads use the documented POST /v2/auth/token
+        #     ({identifier, secret} -> access_token), the PAT-oriented flow. Only
+        #     an explicit 404/405 falls back to POST /v2/users/login. Authentication
+        #     errors, rate limits, server errors and transport failures remain
+        #     fail-closed.
         #   * Tag deletion has NO documented endpoint. The spec exposes only
         #     GET/HEAD on .../tags/{tag} and defines no tag DELETE anywhere, so
         #     the /v2/repositories/{ns}/{repo}/tags/{tag}/ DELETE used below is
-        #     undocumented-but-working. Its status code is therefore never
-        #     trusted: removal is confirmed by re-reading the tag afterwards.
+        #     legacy. Live delivery proved that its DELETE needs a separate JWT
+        #     from /v2/users/login even when the modern Bearer token can read the
+        #     same tag. The normal path keeps Bearer reads and a dedicated JWT
+        #     config only for DELETE; the explicit 404/405 read fallback remains
+        #     JWT. DELETE status is never trusted; removal is confirmed by re-read.
         #   * A bare 404 on the tag is NOT proof of deletion — a wrong namespace
         #     returns 404 too. So the repository itself is checked for HTTP 200
         #     first, which makes a subsequent tag 404 meaningful.
@@ -731,12 +734,36 @@ jobs:
           readonly WORKDIR
           trap 'rm -rf "$WORKDIR"' EXIT
           readonly AUTH_CFG="${WORKDIR}/auth.conf"
+          readonly DELETE_AUTH_CFG="${WORKDIR}/delete-auth.conf"
           readonly BODY="${WORKDIR}/body.json"
           readonly RESPONSE="${WORKDIR}/response.json"
+
+          legacy_login() {
+            local output_cfg="$1" token
+
+            # Never let a failed retry reuse a previously issued token.
+            rm -f "$output_cfg"
+            CLEANUP_ID="$REGISTRY_USERNAME" CLEANUP_SECRET="$REGISTRY_PASSWORD" \
+              jq -nc '{username: env.CLEANUP_ID, password: env.CLEANUP_SECRET}' > "$BODY"
+            token="$(
+              curl -sS --fail --max-time 30 -X POST "${HUB}/v2/users/login" \
+                -H 'Content-Type: application/json' --data-binary "@${BODY}" \
+              | jq -r '.token // empty'
+            )" || token=''
+            rm -f "$BODY"
+
+            if [[ -n "$token" ]]; then
+              printf 'header = "Authorization: JWT %s"\n' "$token" > "$output_cfg"
+              return 0
+            fi
+
+            return 1
+          }
 
           authenticate() {
             local http_code token
 
+            rm -f "$AUTH_CFG" "$RESPONSE"
             CLEANUP_ID="$REGISTRY_USERNAME" CLEANUP_SECRET="$REGISTRY_PASSWORD" \
               jq -nc '{identifier: env.CLEANUP_ID, secret: env.CLEANUP_SECRET}' > "$BODY"
             http_code="$(
@@ -768,17 +795,8 @@ jobs:
                 ;;
             esac
 
-            CLEANUP_ID="$REGISTRY_USERNAME" CLEANUP_SECRET="$REGISTRY_PASSWORD" \
-              jq -nc '{username: env.CLEANUP_ID, password: env.CLEANUP_SECRET}' > "$BODY"
-            token="$(
-              curl -sS --fail --max-time 30 -X POST "${HUB}/v2/users/login" \
-                -H 'Content-Type: application/json' --data-binary "@${BODY}" \
-              | jq -r '.token // empty'
-            )" || token=''
-            rm -f "$BODY"
-            if [[ -n "$token" ]]; then
+            if legacy_login "$AUTH_CFG"; then
               echo "Token endpoint unavailable; fell back to the legacy login flow."
-              printf 'header = "Authorization: JWT %s"\n' "$token" > "$AUTH_CFG"
               return 0
             fi
 
@@ -798,20 +816,36 @@ jobs:
           }
 
           cleanup_once() {
-            local before after
+            local before after delete_code
 
             repo_reachable || { echo "Repository ${REGISTRY_USERNAME}/${IMAGE_NAME} not reachable."; return 1; }
 
             before="$(status_of "$TAG_URL")"
-            if [[ "$before" == "404" ]]; then
-              # Repo is reachable and the tag is already absent. Do not claim it
-              # was never published; a prior cleanup could have removed it.
-              report "already absent — nothing to remove"
-              return 0
-            fi
+            case "$before" in
+              404)
+                # Repo is reachable and the tag is already absent. Do not claim it
+                # was never published; a prior cleanup could have removed it.
+                report "already absent — nothing to remove"
+                return 0
+                ;;
+              200) ;;
+              *)
+                echo "Tag pre-delete check returned HTTP $before; refusing deletion."
+                return 1
+                ;;
+            esac
 
-            curl -sS -o /dev/null --max-time 30 -X DELETE \
-              --config "$AUTH_CFG" "$LEGACY_DELETE_URL" || true
+            # The undocumented DELETE silently no-ops with the modern Bearer
+            # token. Keep its required legacy JWT isolated from read auth.
+            legacy_login "$DELETE_AUTH_CFG" || {
+              echo "Legacy JWT required for tag deletion could not be acquired."
+              return 1
+            }
+            delete_code="$(
+              curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X DELETE \
+                --config "$DELETE_AUTH_CFG" "$LEGACY_DELETE_URL"
+            )" || delete_code='000'
+            echo "Legacy tag DELETE returned HTTP $delete_code; verifying by re-read."
 
             # Success is decided by this re-read, never by the DELETE status code.
             after="$(status_of "$TAG_URL")"
