@@ -83,6 +83,7 @@ jobs:
             raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             registry.npmjs.org:443
+            scanner.sonarcloud.io:443
             sonarcloud.io:443
 
       - name: Checkout
