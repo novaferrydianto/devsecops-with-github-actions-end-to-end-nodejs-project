@@ -75,9 +75,11 @@ jobs:
           allowed-endpoints: >
             api.github.com:443
             api.sonarcloud.io:443
+            binaries.sonarsource.com:443
             github.com:443
             objects.githubusercontent.com:443
             raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             registry.npmjs.org:443
             sonarcloud.io:443
 
@@ -148,8 +150,11 @@ jobs:
           allowed-endpoints: >
             api.github.com:443
             api.snyk.io:443
+            downloads.snyk.io:443
             github.com:443
             objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             registry.npmjs.org:443
             snyk.io:443
             static.snyk.io:443
@@ -386,6 +391,7 @@ jobs:
             production.cloudflare.docker.com:443
             production.cloudfront.docker.com:443
             raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             registry-1.docker.io:443
             registry.npmjs.org:443
 
