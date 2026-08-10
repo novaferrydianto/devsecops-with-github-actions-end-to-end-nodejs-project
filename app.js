@@ -156,8 +156,7 @@ function json(res, obj) {
 // 🏁 EXECUTION
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) {
-  run().then(server => {
-    process.on('SIGINT', () => shutdown(server));
-    process.on('SIGTERM', () => shutdown(server));
-  });
+  const server = await run();
+  process.on('SIGINT', () => shutdown(server));
+  process.on('SIGTERM', () => shutdown(server));
 }

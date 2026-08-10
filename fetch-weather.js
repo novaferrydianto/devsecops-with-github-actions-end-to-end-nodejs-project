@@ -28,7 +28,7 @@ export async function fetchWeather(location) {
     const res = await fetchFn(url, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!res || !res.ok) {
+    if (!res?.ok) {
       throw new Error(`HTTP error! Status: ${res?.status ?? "Unknown"}`);
     }
 
