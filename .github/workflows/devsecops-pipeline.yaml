@@ -157,6 +157,7 @@ jobs:
             api.snyk.io:443
             check.trivy.dev:443
             downloads.snyk.io:443
+            get.trivy.dev:443
             github.com:443
             mirror.gcr.io:443
             objects.githubusercontent.com:443
@@ -393,6 +394,7 @@ jobs:
             auth.docker.io:443
             cgr.dev:443
             check.trivy.dev:443
+            get.trivy.dev:443
             ghcr.io:443
             github.com:443
             index.docker.io:443
