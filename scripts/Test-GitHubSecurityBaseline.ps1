@@ -105,7 +105,7 @@ function Invoke-GhApiPaginatedArray {
     $page = 1
 
     while ($true) {
-        $separator = if ($Endpoint.Contains('?')) { '&' } else { '?' }
+        $separator = $Endpoint.Contains('?') ? '&' : '?'
         $pageEndpoint = "$Endpoint${separator}per_page=$PerPage&page=$page"
         $raw = @(& gh api $pageEndpoint 2>&1)
         $exitCode = $LASTEXITCODE
