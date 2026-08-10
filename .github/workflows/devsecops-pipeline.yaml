@@ -157,6 +157,7 @@ jobs:
             api.snyk.io:443
             check.trivy.dev:443
             downloads.snyk.io:443
+            get.trivy.dev:443
             github.com:443
             mirror.gcr.io:443
             objects.githubusercontent.com:443
@@ -349,7 +350,7 @@ jobs:
         with:
           # trivy-action v0.36.0 defaults to Trivy CLI v0.70.0; pin the scanner itself
           # to the current release so vuln/DB coverage doesn't silently lag.
-          version: v0.72.0
+          version: v0.73.0
           scan-type: fs
           scan-ref: .
           format: table
@@ -393,6 +394,7 @@ jobs:
             auth.docker.io:443
             cgr.dev:443
             check.trivy.dev:443
+            get.trivy.dev:443
             ghcr.io:443
             github.com:443
             index.docker.io:443
@@ -431,7 +433,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         continue-on-error: true
         with:
-          version: v0.72.0
+          version: v0.73.0
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE }}
           format: sarif
@@ -453,7 +455,7 @@ jobs:
       - name: Trivy Image Scan (ENFORCING gate — fail-closed)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.72.0
+          version: v0.73.0
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE }}
           format: table
@@ -468,7 +470,7 @@ jobs:
       - name: Generate SBOM (CycloneDX)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.72.0
+          version: v0.73.0
           scan-type: image
           image-ref: ${{ env.LOCAL_IMAGE }}
           format: cyclonedx
