@@ -3,14 +3,30 @@
 # ==============================================================================
 
 # 1. Global Ownership
-# Secara default, semua file di repo ini dimiliki oleh Nova
+# Solo-maintainer note: entries in this file document ownership and drive
+# notifications only. While the repository has one maintainer, the master
+# ruleset must not require CODEOWNER approval because the PR author cannot
+# approve their own change. Automated checks and verified commit signatures are
+# the enforceable compensating controls; this file is not evidence of four-eyes
+# review.
 * @novaferrydianto
 
 # 2. CI/CD Pipeline (Extremely Sensitive)
-# Perubahan pada alur kerja GitHub Actions wajib di-review ketat
+# Perubahan pada alur kerja GitHub Actions wajib melalui PR dan seluruh
+# automated security gates, meskipun tidak ada independent human reviewer.
 /.github/workflows/    @novaferrydianto
 /.github/dependabot.yml @novaferrydianto
 /.zap/                 @novaferrydianto
+
+# Agent rules can change how repository automation is interpreted. They remain
+# advisory, but changes must receive the same security-gate evidence as CI code.
+/.agents/              @novaferrydianto
+/.agent/               @novaferrydianto
+/.antigravity/         @novaferrydianto
+/_agents/              @novaferrydianto
+/AGENTS.md              @novaferrydianto
+/GEMINI.md              @novaferrydianto
+/CLAUDE.md              @novaferrydianto
 
 # 3. Container & Infrastructure
 # Dockerfile dan script build adalah target utama supply chain attack

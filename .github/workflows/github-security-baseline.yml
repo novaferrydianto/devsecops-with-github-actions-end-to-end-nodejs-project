@@ -1,0 +1,93 @@
+name: GitHub Security Baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-security-baseline-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: authorize-github-security-baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions: {}
+    outputs:
+      audit_environment: ${{ steps.target.outputs.audit_environment }}
+    steps:
+      - name: Harden authorization runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+
+      - name: Authorize exact master ref
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != 'refs/heads/master' ]]; then
+            echo "::error title=Invalid ref::This manual audit must run from refs/heads/master; received $GITHUB_REF."
+            exit 1
+          fi
+
+          echo 'audit_environment=security-audit' >> "$GITHUB_OUTPUT"
+
+  github-security-baseline:
+    # Keep this job ID and name stable so evidence uses one predictable context.
+    name: github-security-baseline
+    needs: authorize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    environment:
+      # Manual prerequisite: create `security-audit`, restrict its deployment
+      # branch policy to master, and add SECURITY_BASELINE_READ_TOKEN only as an
+      # environment secret (never as a repository or organization secret). Use
+      # a short-lived fine-grained token with Administration, Actions, and
+      # Metadata read access. This workflow never mutates GitHub settings.
+      name: ${{ needs.authorize.outputs.audit_environment }}
+
+    steps:
+      - name: Harden the runner (GitHub API and checkout egress only)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+
+      - name: Enforce exact master ref
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != 'refs/heads/master' ]]; then
+            echo "::error title=Invalid ref::This manual audit must run from refs/heads/master; received $GITHUB_REF."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Audit Solo GitHub security baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.SECURITY_BASELINE_READ_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+            throw 'SECURITY_BASELINE_READ_TOKEN is missing from the security-audit environment.'
+          }
+
+          ./scripts/Test-GitHubSecurityBaseline.ps1 `
+            -GovernanceMode Solo `
+            -BypassLookbackDays 30

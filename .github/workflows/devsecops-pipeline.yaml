@@ -68,14 +68,16 @@ jobs:
     outputs:
       sonar_gate: ${{ steps.sonar.outcome }}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
           allowed-endpoints: >
+            analysis-sensorcache-eu-central-1-prod.s3.eu-central-1.amazonaws.com:443
             api.github.com:443
             api.sonarcloud.io:443
             binaries.sonarsource.com:443
+            dna-visualization-scannerdata-eu-central-1-prod.s3.eu-central-1.amazonaws.com:443
             github.com:443
             keys.openpgp.org:443
             keyserver.ubuntu.com:443
@@ -146,15 +148,17 @@ jobs:
     outputs:
       snyk_gate: ${{ steps.snyk_gate.outcome }}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             api.snyk.io:443
+            check.trivy.dev:443
             downloads.snyk.io:443
             github.com:443
+            mirror.gcr.io:443
             objects.githubusercontent.com:443
             raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
@@ -336,8 +340,10 @@ jobs:
           echo "Snyk vulnerability and emitted-license policy passed."
 
       - name: Trivy FS Scan (ENFORCING)
-        # Was report-only before. Now gates on fixable CRITICAL/HIGH.
-        # Relax to `exit-code: 0` (report-only) if this proves too strict for your repo.
+        # Fail on every CRITICAL/HIGH finding, including findings with no vendor
+        # fix yet. No suppression file is active. A future exception must be
+        # explicit, reviewed, CVE/path-scoped, expiring in `.trivyignore.yaml`,
+        # and wired through `trivyignores`; never hide the whole unfixed class.
         if: ${{ !cancelled() }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -349,7 +355,7 @@ jobs:
           format: table
           output: trivy-fs-report.txt
           severity: CRITICAL,HIGH
-          ignore-unfixed: true
+          ignore-unfixed: false
           exit-code: 1
 
       - name: Upload Security Artifacts
@@ -378,7 +384,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
@@ -386,9 +392,11 @@ jobs:
             api.github.com:443
             auth.docker.io:443
             cgr.dev:443
+            check.trivy.dev:443
             ghcr.io:443
             github.com:443
             index.docker.io:443
+            mirror.gcr.io:443
             objects.githubusercontent.com:443
             pkg-containers.githubusercontent.com:443
             production.cloudflare.docker.com:443
@@ -412,8 +420,10 @@ jobs:
           context: .
           load: true
           tags: ${{ env.LOCAL_IMAGE }}
-          # Local docker save/load continuity is used here; OCI provenance is
-          # intentionally not claimed by this workflow.
+          # Local docker save/load continuity is used here. BuildKit provenance
+          # cannot survive the local daemon round-trip, so the delivery job
+          # creates and verifies a workflow-bound SLSA provenance attestation
+          # against the final registry digest instead.
           provenance: false
 
       # --- Informational SARIF for the Security tab (never blocks) ---
@@ -448,7 +458,9 @@ jobs:
           image-ref: ${{ env.LOCAL_IMAGE }}
           format: table
           severity: CRITICAL,HIGH
-          ignore-unfixed: true # don't block on CVEs with no available fix; remove to be stricter
+          # Keep unfixed findings visible and enforcing. No suppression file is
+          # active; a reviewed YAML exception must be wired through `trivyignores`.
+          ignore-unfixed: false
           exit-code: 1
 
       # Steps below only run if the gate above passed -> we only ever
@@ -482,12 +494,14 @@ jobs:
           name: sbom-cyclonedx
           path: trivy-sbom.json
           if-no-files-found: error
-          retention-days: 7
+          # Release consumes this artifact from the exact trusted pipeline run.
+          retention-days: 30
 
   # =================================================================
   # STAGE 4: DELIVERY & SIGNING  (master push only; waits for DAST below)
   # Loads the EXACT scanned image, stages it, then signs/verifies and attests
-  # its resolved digest before promoting a full-SHA tag. Keyless (OIDC).
+  # its SBOM plus workflow provenance to the resolved digest before promoting
+  # a full-SHA tag. Keyless (OIDC).
   # =================================================================
   deliver_sign:
     needs: [build_scan, dast_zap_ci]
@@ -637,6 +651,58 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Staged $IMAGE_PATH@$DIGEST for verification."
 
+      - name: Generate workflow-bound SLSA provenance predicate
+        run: |
+          set -euo pipefail
+          readonly SOURCE_URI="git+https://github.com/${GITHUB_REPOSITORY}@refs/heads/master"
+          readonly INVOCATION_URI="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}"
+
+          # SLSA provenance v0.2 is used because Cosign v2's `slsaprovenance`
+          # predicate type maps to that schema. This is intentionally honest:
+          # the build is not claimed reproducible, and the material is the exact
+          # Git commit already checked out, scanned, and carried forward once.
+          jq -n \
+            --arg builder "$EXPECTED_COSIGN_IDENTITY" \
+            --arg source "$SOURCE_URI" \
+            --arg sha "$GITHUB_SHA" \
+            --arg invocation "$INVOCATION_URI" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{
+              builder: {id: $builder},
+              buildType: "https://github.com/Attestations/GitHubActionsWorkflow@v1",
+              invocation: {
+                configSource: {
+                  uri: $source,
+                  digest: {sha1: $sha},
+                  entryPoint: ".github/workflows/devsecops-pipeline.yaml"
+                },
+                parameters: {},
+                environment: {
+                  github_run_id: $run_id,
+                  github_run_attempt: $run_attempt
+                }
+              },
+              buildConfig: {},
+              metadata: {
+                buildInvocationId: $invocation,
+                completeness: {
+                  # The predicate records the workflow identity, run, and source
+                  # commit, but it does not enumerate every action/tool/base-image
+                  # input. Do not overstate SLSA completeness.
+                  parameters: false,
+                  environment: false,
+                  materials: false
+                },
+                reproducible: false
+              },
+              materials: [{uri: $source, digest: {sha1: $sha}}]
+            }' > slsa-provenance.json
+
+          jq -e --arg sha "$GITHUB_SHA" \
+            'any(.materials[]?; .digest.sha1 == $sha)' \
+            slsa-provenance.json > /dev/null
+
       - name: Sign image BY DIGEST (keyless / OIDC)
         run: |
           set -euo pipefail
@@ -670,6 +736,42 @@ jobs:
             --certificate-github-workflow-sha "$GITHUB_SHA" \
             "${{ steps.stage.outputs.ref }}" > /dev/null
           echo "SBOM attestation verified."
+
+      - name: Attest SLSA provenance to the image digest
+        run: |
+          set -euo pipefail
+          cosign attest --yes --type slsaprovenance \
+            --predicate slsa-provenance.json \
+            "${{ steps.stage.outputs.ref }}"
+
+      - name: Verify SLSA provenance before promotion
+        run: |
+          set -euo pipefail
+          readonly VERIFIED_PROVENANCE="verified-provenance.json"
+
+          cosign verify-attestation --type slsaprovenance \
+            --output json \
+            --certificate-identity "$EXPECTED_COSIGN_IDENTITY" \
+            --certificate-oidc-issuer "$EXPECTED_COSIGN_ISSUER" \
+            --certificate-github-workflow-trigger push \
+            --certificate-github-workflow-sha "$GITHUB_SHA" \
+            "${{ steps.stage.outputs.ref }}" > "$VERIFIED_PROVENANCE"
+
+          # Do not stop at cryptographic validity: bind the verified predicate
+          # back to this exact commit so a different valid attestation cannot be
+          # accepted accidentally.
+          jq -e -s --arg sha "$GITHUB_SHA" '
+            [
+              .[]
+              | if type == "array" then .[] else . end
+              | .payload
+              | @base64d
+              | fromjson
+              | select(any(.predicate.materials[]?; .digest.sha1 == $sha))
+            ]
+            | length > 0
+          ' "$VERIFIED_PROVENANCE" > /dev/null
+          echo "SLSA provenance verified and bound to $GITHUB_SHA."
 
       - name: Promote verified digest to the full commit SHA tag
         id: promote
@@ -715,6 +817,14 @@ jobs:
             echo "- **Staging tag:** \`${{ steps.stage.outputs.staging_tag }}\` (pending verified cleanup — see the line below)"
             echo "- **Signing:** Keyless (Sigstore Fulcio + Rekor transparency log)"
             echo "- **SBOM:** CycloneDX attested to the digest"
+            # Single-quoted on purpose: the format string has literal backticks
+            # for Markdown code formatting, and double-quoting would make the
+            # shell try to run `%s` as a command substitution before printf
+            # ever sees it. $GITHUB_SHA is substituted safely via printf's %s
+            # argument below.
+            # shellcheck disable=SC2016
+            printf -- '- **Provenance:** SLSA predicate attested, verified, and bound to `%s`\n' \
+              "$GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the staging tag from the registry
@@ -947,21 +1057,27 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
+            api.openweathermap.org:443
             auth.docker.io:443
+            cfu.zaproxy.org:443
             github.com:443
             ghcr.io:443
             index.docker.io:443
+            news.zaproxy.org:443
             objects.githubusercontent.com:443
             pkg-containers.githubusercontent.com:443
             production.cloudflare.docker.com:443
             production.cloudfront.docker.com:443
+            raw.githubusercontent.com:443
             registry-1.docker.io:443
+            release-assets.githubusercontent.com:443
+            tel.zaproxy.org:443
 
       - name: Checkout ZAP policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1016,6 +1132,10 @@ jobs:
           readonly ZAP_ORIGIN="https://${HOST_GW}:3000"
 
           docker run -d --name app -p "${HOST_GW}:3000:3000" \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges \
             -v "${TLS_DIR}:/run/tls:ro" \
             -e OPENWEATHER_API_KEY="dummy" \
             -e OPENWEATHER_TIMEOUT_MS="3000" \
@@ -1065,7 +1185,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
@@ -1166,9 +1286,9 @@ jobs:
             printf '| 📦🔏 Deliver / Sign / Attest | %s %s |\n' \
               "$(icon "$DELIVER_SIGN_RESULT")" "$DELIVER_SIGN_RESULT"
             echo
-            echo "_Publish policy (master pushes only): single build → scanned → DAST → staged by digest → signed/attested and verified → promoted by full commit SHA._"
+            echo "_Publish policy (master pushes only): single build → scanned → DAST → staged by digest → signed → SBOM/provenance attested and verified → promoted by full commit SHA._"
             echo
-            echo "_Gate policy: npm audit + deterministic lockfile license inventory + Trivy on every event · Sonar/Snyk on every secret-backed ref, including pre-merge same-repo PRs (fork PRs and Dependabot excluded) · ZAP route matrix WARN/FAIL · Cosign keyless · fail-closed staging-tag cleanup with post-delete re-read._"
+            echo "_Gate policy: npm audit + deterministic lockfile license inventory + Trivy CRITICAL/HIGH (fixed or unfixed) on every event · Sonar/Snyk on every secret-backed ref, including pre-merge same-repo PRs (fork PRs and Dependabot excluded) · ZAP route matrix WARN/FAIL · Cosign keyless · fail-closed staging-tag cleanup with post-delete re-read._"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if (( gate_failed != 0 )); then

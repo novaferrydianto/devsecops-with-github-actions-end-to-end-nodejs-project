@@ -1,88 +1,103 @@
-name: "🚨 Security Scan Failure"
-description: "Report a failure from automated security scans (Snyk, Trivy, ZAP, TruffleHog)"
-title: "🚨 [SEC-ALERT]: <Brief Description>"
-labels: ["security", "high-risk", "needs-triage"]
+name: "🛠️ Security Scanner Operational Failure"
+description: "Report a scanner execution, integration, timeout, or redacted CI failure. Never report vulnerability or secret details here."
+title: "🛠️ [SEC-SCANNER-OPS]: <Redacted summary>"
+labels: ["security"]
 assignees: []
 body:
   - type: markdown
     attributes:
       value: |
-        ## 🛡️ Security Incident Triage Form
-        Harap isi formulir ini dengan detail agar tim DevSecOps dapat segera mengisolasi dan memitigasi risiko.
+        ## Public operational report only
+
+        Use this form only when a security scanner failed to execute or publish a trustworthy result.
+        **Do not include secrets, tokens, exploit details, vulnerable code, raw scanner output, or unredacted artifacts.**
+        Report vulnerabilities and secret exposure through the private security link in the issue chooser.
 
   - type: dropdown
     id: scanner-type
     attributes:
-      label: 🧠 What failed? (Scanner Source)
-      description: Pilih sistem yang mendeteksi kerentanan ini.
-      multiple: true
+      label: Scanner
+      description: Select the scanner that had an operational failure.
+      multiple: false
       options:
-        - "Snyk (Dependencies / SCA)"
+        - "Snyk (SCA)"
+        - "SonarQube Cloud (SAST / Quality Gate)"
         - "Trivy (FS / IaC / Image)"
         - "OWASP ZAP (DAST)"
-        - "TruffleHog (Secret Leak)"
+        - "TruffleHog (Secret Detection)"
         - "CodeQL (SAST)"
-        - "Fuzz Testing (fast-check)"
+        - "OpenSSF Scorecard"
         - "Other"
     validations:
       required: true
 
-  - type: textarea
-    id: artifacts
-    attributes:
-      label: 📎 Attached Artifacts & Logs
-      description: |
-        Wajib sertakan tautan ke Run CI/CD atau salin log error mentah di sini. Jika ada artifact file (e.g., snyk-report.json), sebutkan lokasinya.
-      placeholder: |
-        - CI/CD Run URL: https://github.com/.../actions/runs/...
-        - Failing Module: ...
-    validations:
-      required: true
-
-  - type: textarea
-    id: impact-assessment
-    attributes:
-      label: 🧩 Impact Assessment (SOC-lite)
-      description: Jelaskan radius ledakan (blast radius) dari temuan ini.
-      value: |
-        - **Affected service/module:** - **Attack surface:** (API / package / infra / container)
-        - **Potential risk if not fixed:** - **Prod impact:** (Yes / No - explain)
-    validations:
-      required: true
-
   - type: dropdown
-    id: sla-target
+    id: failure-class
     attributes:
-      label: ⏱️ Target Remediation SLA
-      description: Pilih SLA berdasarkan keparahan (severity) temuan.
+      label: Failure class
+      description: Describe the operational control that failed, not the security finding.
       options:
-        - "Critical (Fix within 24 Hours)"
-        - "High (Fix within 7 Days)"
-        - "Medium (Fix within 30 Days)"
-        - "Low (Backlog)"
+        - "Scanner could not start or crashed"
+        - "Dependency or verified binary download failed"
+        - "Checksum or signature verification failed"
+        - "Deny-all egress blocked a required endpoint"
+        - "Authentication or rate-limit failure"
+        - "Timeout or runner-capacity failure"
+        - "Report parsing or upload failed"
+        - "Other operational failure"
+    validations:
+      required: true
+
+  - type: input
+    id: workflow-run
+    attributes:
+      label: Workflow run URL
+      description: Link to the failed GitHub Actions run. Confirm its visible logs contain no sensitive material first.
+      placeholder: "https://github.com/OWNER/REPO/actions/runs/RUN_ID"
+    validations:
+      required: true
+
+  - type: textarea
+    id: redacted-error
+    attributes:
+      label: Redacted error summary
+      description: Summarize the failing step and exit code. Do not paste raw logs or scanner reports.
+      placeholder: |
+        - Failing job/step:
+        - Exit code or GitHub annotation:
+        - Last known successful run:
+        - Redacted operational impact:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction and attempted recovery
+      description: Include only non-sensitive commands/configuration and reversible recovery steps already attempted.
+      placeholder: |
+        1. Re-run result:
+        2. Endpoint/tool/version checked:
+        3. Rollback or retry attempted:
     validations:
       required: true
 
   - type: checkboxes
-    id: triage-steps
+    id: public-safety-confirmation
     attributes:
-      label: 🧭 Next Steps (Triage Process)
-      description: Checklist wajib untuk tim yang menangani tiket ini.
+      label: Public disclosure safety confirmation
       options:
-        - label: Review vulnerability details
-          required: false
-        - label: Validate exploitability (False Positive check)
-          required: false
-        - label: Patch / upgrade affected dependency or code
-          required: false
-        - label: Verify no hardcoded secrets remain (if applicable)
-          required: false
-        - label: Re-run CI/CD security scans successfully
-          required: false
+        - label: "I removed all secrets, tokens, credentials, cookies, internal endpoints, and personal data."
+          required: true
+        - label: "I did not attach raw SARIF, NDJSON, scanner output, or other security artifacts."
+          required: true
+        - label: "This report concerns scanner operation only; vulnerability or secret details were routed privately."
+          required: true
 
   - type: textarea
     id: additional-notes
     attributes:
-      label: 📝 Additional Notes
-      description: Tambahkan konteks tambahan dari pipeline atau developer.
+      label: Additional redacted context
+      description: Optional operational context that is safe to disclose publicly.
+    validations:
       required: false

@@ -1,4 +1,4 @@
-name: 🛡️ Security Self-Healing
+name: 🛡️ Security Resolution Evidence
 
 on:
   workflow_run:
@@ -10,20 +10,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: security-self-healing-${{ github.ref }}
+  group: security-resolution-evidence-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 jobs:
-  close-resolved-issues:
-    runs-on: ubuntu-latest
+  record-resolution-evidence:
+    name: Record security verification evidence
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
       issues: write
-    # Hanya berjalan jika pipeline utama BERHASIL (Success)
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
@@ -31,26 +32,63 @@ jobs:
             api.github.com:443
             github.com:443
 
-      - name: 🔍 Find and Close Resolved Security Issues
+      - name: Add evidence comment without closing issues
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # ✅ FIXED 1: Mendeklarasikan target repositori secara eksplisit
           REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
-          echo "Pipeline sukses! Memulai pembersihan tiket keamanan..."
-          
-          # Deny-by-default: hanya tiket yang eksplisit opt-in untuk auto-remediation.
-          ISSUES=$(gh issue list -R "$REPO" --label "security" --label "auto-remediate" --state open --json number --jq '.[].number')
-          
-          if [ -z "$ISSUES" ]; then
-            echo "✅ Tidak ada tiket security auto-remediate yang terbuka."
+          set -euo pipefail
+
+          # The auto-remediate label is an explicit opt-in for evidence comments.
+          # A green global pipeline is supporting evidence, not proof that every
+          # issue is resolved, so this workflow never closes or relabels issues.
+          ISSUES=$(gh issue list \
+            --repo "$REPO" \
+            --label "security" \
+            --label "auto-remediate" \
+            --state open \
+            --limit 100 \
+            --json number \
+            --jq '.[].number')
+
+          if [[ -z "$ISSUES" ]]; then
+            echo "No open security issues opted in for resolution evidence."
             exit 0
           fi
-          
-          for ISSUE_NUMBER in $ISSUES; do
-            echo "Closing issue #$ISSUE_NUMBER..."
-            
-            gh issue comment "$ISSUE_NUMBER" -R "$REPO" --body "✅ **Self-Healing Triggered**: DevSecOps Pipeline build #${{ github.event.workflow_run.run_number }} sukses. Tiket ini memiliki label \`auto-remediate\`, jadi ditutup otomatis sesuai policy."
-            
-            gh issue close "$ISSUE_NUMBER" -R "$REPO" --reason "completed"
-          done
+
+          MARKER="<!-- security-evidence:workflow-run:${RUN_ID} -->"
+          COMMENT_FILE="$RUNNER_TEMP/security-evidence-comment.md"
+          {
+            echo "$MARKER"
+            echo "### 🛡️ Pipeline evidence available — manual verification required"
+            echo
+            echo "DevSecOps Pipeline [run #${RUN_NUMBER}](${RUN_URL}) completed successfully for commit \`${RUN_SHA}\`."
+            echo
+            echo "This is supporting evidence only. It does **not** prove that this issue is resolved, and this automation will not close or relabel the issue. The owner must verify the original finding, affected artifact, and remediation before closing it."
+          } > "$COMMENT_FILE"
+
+          while IFS= read -r ISSUE_NUMBER; do
+            [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]] || {
+              echo "::error::GitHub returned an invalid issue number."
+              exit 1
+            }
+
+            EXISTING_COMMENT=$(gh api \
+              --paginate \
+              "repos/$REPO/issues/$ISSUE_NUMBER/comments" \
+              --jq ".[] | select(.body | contains(\"$MARKER\")) | .id")
+
+            if [[ -n "$EXISTING_COMMENT" ]]; then
+              echo "Issue #$ISSUE_NUMBER already contains evidence for workflow run $RUN_ID."
+              continue
+            fi
+
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "$REPO" \
+              --body-file "$COMMENT_FILE"
+          done <<< "$ISSUES"

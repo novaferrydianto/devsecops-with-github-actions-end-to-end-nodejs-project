@@ -39,8 +39,8 @@ Modernized from Lissy93’s original project and upgraded into a **Secure Softwa
    - Trivy filesystem & OS package scan
 
 5. **Supply Chain Security — Cosign**  
-   - Keyless image signing and CycloneDX attestation by immutable digest.
-   - Full commit-SHA tag dipromosikan hanya setelah signature dan attestation terverifikasi.
+   - Keyless image signing plus CycloneDX SBOM and workflow-bound SLSA provenance attestations by immutable digest.
+   - Full commit-SHA tag dipromosikan hanya setelah signature, SBOM, provenance, dan source commit terverifikasi.
 
 6. **DAST — OWASP ZAP**  
    - Pinned ZAP Baseline passive scan untuk `/`, `/health`, `/weather`, dan `/robots.txt`.
@@ -162,7 +162,7 @@ App running at: http://localhost:3000
 | Fuzzing | fast-check | Property-based testing |
 | SBOM | Trivy | Software Bill of Materials (CycloneDX) |
 | Container Scan | Trivy | OS & FS vulnerability scan |
-| Signing | Cosign | Keyless image signature + SBOM attestation |
+| Signing & provenance | Cosign | Keyless image signature + verified SBOM/SLSA attestations |
 | DAST | OWASP ZAP | Passive baseline scan across explicit routes |
 
 ---
@@ -174,9 +174,9 @@ App running at: http://localhost:3000
 2. Unit tests, c8 coverage gate, npm audit, lockfile license inventory, Gitleaks
 3. SonarCloud + Snyk on every secret-backed ref, incl. same-repo PRs (skipped for fork PRs and Dependabot)
 4. Docker Buildx single image build
-5. Trivy filesystem/image gates + CycloneDX SBOM
+5. Trivy filesystem/image gates (fixed and unfixed High/Critical) + CycloneDX SBOM
 6. Four-route OWASP ZAP Baseline matrix (WARN/FAIL enforcing)
-7. Master push only: stage image, sign/verify, attest/verify, promote full-SHA tag
+7. Master push only: stage image, sign/verify, attest/verify SBOM + SLSA provenance, promote full-SHA tag
 8. Enforcing aggregate GitHub Summary
 ```
 
