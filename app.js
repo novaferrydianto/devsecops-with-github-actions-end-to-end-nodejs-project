@@ -155,8 +155,10 @@ function json(res, obj) {
 
 // 🏁 EXECUTION
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+/* c8 ignore start -- isMain is always false under mocha; this bootstrap only runs via `node app.js` */
 if (isMain) {
   const server = await run();
   process.on('SIGINT', () => shutdown(server));
   process.on('SIGTERM', () => shutdown(server));
 }
+/* c8 ignore stop */

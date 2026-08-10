@@ -74,6 +74,16 @@ describe("Weather data processing", function () {
     await expect(fetchWeather("Tokyo")).to.be.rejectedWith("HTTP error");
   });
 
+  it("should throw an error when the API resolves with a non-ok status", async () => {
+    fetchStub = sinon.stub(global, "fetch").resolves({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    });
+
+    await expect(fetchWeather("Atlantis")).to.be.rejectedWith("HTTP error");
+  });
+
   it("should parse snow data correctly from raw Helsinki snapshot", async () => {
     const rawSnow = await import("../test-data/sample-weather-snow-raw.json", { with: { type: "json" } });
     fetchStub = sinon.stub(global, "fetch").resolves({
