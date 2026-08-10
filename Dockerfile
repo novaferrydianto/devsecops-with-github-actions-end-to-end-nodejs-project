@@ -1,8 +1,12 @@
 # =================================================================
 # STAGE 1: Build & Dependencies
 # =================================================================
-# cgr.dev/chainguard/node:latest-dev
-FROM cgr.dev/chainguard/node@sha256:1bd1aa2a03ffd28fff8f99f1330bbf3080e03d5c76e4758572a403dd71baa9e8 AS builder
+# Tag kept alongside the digest (not just in a comment) so Dependabot's
+# docker-ecosystem updater tracks *this* tag's digest, not a bare-digest
+# reference which it resolves against "latest" regardless of which tag the
+# pin actually came from. docker:S8431 is excluded for this file in
+# sonar-project.properties for the same reason.
+FROM cgr.dev/chainguard/node:latest-dev@sha256:1bd1aa2a03ffd28fff8f99f1330bbf3080e03d5c76e4758572a403dd71baa9e8 AS builder
 
 # Set context ke user node sejak awal
 WORKDIR /app
@@ -21,8 +25,7 @@ RUN npm prune --production
 # =================================================================
 # STAGE 2: Hardened Runtime
 # =================================================================
-# cgr.dev/chainguard/node:latest
-FROM cgr.dev/chainguard/node@sha256:8e1189525a80564e0df5cec59bc4aa5d859869e6e7c05b0a4290682fbd53563e
+FROM cgr.dev/chainguard/node:latest@sha256:8e1189525a80564e0df5cec59bc4aa5d859869e6e7c05b0a4290682fbd53563e
 
 WORKDIR /app
 
