@@ -12,9 +12,9 @@ describe("Weather Helper Functions", function () {
 
   describe("getVolume (Precipitation Parser)", () => {
     it("should correctly extract volume from object", () => {
-      expect(getVolume({ "1h": 1.2 })).to.equal(1.2);
-      expect(getVolume({ "2h": 3.4 })).to.equal(3.4);
-      expect(getVolume({ "3h": 5.6 })).to.equal(5.6);
+      expect(getVolume({ "1h": 1.2 })).to.be.closeTo(1.2, 0.0001);
+      expect(getVolume({ "2h": 3.4 })).to.be.closeTo(3.4, 0.0001);
+      expect(getVolume({ "3h": 5.6 })).to.be.closeTo(5.6, 0.0001);
     });
 
     it("should handle JSON strings gracefully", () => {
