@@ -2,11 +2,10 @@
 # DEVSECOPS - ISSUE CHOOSER CONFIGURATION
 # ==============================================================================
 
-# 🛑 SRE Rule: Matikan opsi "Blank Issue" agar semua pelapor WAJIB pakai template YAML
+# Require a structured, disclosure-safe issue form for every public report.
 blank_issues_enabled: false
 
-# 🔗 Routing eksternal untuk pelaporan keamanan tingkat tinggi
 contact_links:
-  - name: 🔒 Report a Critical Security Vulnerability (Private)
+  - name: 🔒 Report a Vulnerability or Secret Exposure Privately
     url: https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/advisories/new
-    about: Please DO NOT open a public issue for critical Zero-Day or active exploits. Use this private channel.
+    about: Never disclose vulnerabilities, exploit details, credentials, or raw security reports in a public issue. Use this private channel.

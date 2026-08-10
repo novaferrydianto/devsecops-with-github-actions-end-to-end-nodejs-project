@@ -11,8 +11,10 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     groups:
-      ci-actions:
-        patterns: ["*"]   # one grouped PR instead of many noisy ones
+      ci-actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+        # Major action upgrades stay unmatched and therefore get individual PRs.
 
   # --- Node.js app dependencies (package.json / package-lock.json) ---
   - package-ecosystem: "npm"
@@ -21,8 +23,13 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     groups:
-      npm-minor-patch:
+      npm-production-minor-patch:
+        dependency-type: "production"
         update-types: ["minor", "patch"]
+      npm-development-minor-patch:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+        # Major npm upgrades stay unmatched and therefore get individual PRs.
 
   # --- Dockerfile base image (e.g. cgr.dev/chainguard/node) ---
   - package-ecosystem: "docker"

@@ -1,0 +1,83 @@
+name: "✨ Feature Request"
+description: "Propose a non-security product, reliability, or developer-experience improvement"
+title: "✨ [FEATURE]: "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem and desired outcome without including secrets, credentials, personal data, or confidential architecture details. Report possible vulnerabilities through [private vulnerability reporting](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/advisories/new), not this public form.
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      options:
+        - Application
+        - CI/CD or supply chain
+        - Reliability or observability
+        - Container or local runtime
+        - Documentation or developer experience
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Explain the user or operational problem, not only the requested implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired_outcome
+    attributes:
+      label: Desired outcome
+      description: Describe measurable success and expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_approach
+    attributes:
+      label: Proposed approach
+      description: Optional. Include alternatives considered and important trade-offs.
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact_and_risk
+    attributes:
+      label: Impact, risk, and cost
+      description: Note expected users, blast radius, security implications, SLO impact, and operational cost.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] Observable outcome ...
+        - [ ] Validation ...
+        - [ ] Documentation ...
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety_acknowledgement
+    attributes:
+      label: Safety acknowledgement
+      options:
+        - label: I confirmed this request contains no vulnerability details or sensitive data.
+          required: true
+
+  - type: checkboxes
+    id: duplicate_check
+    attributes:
+      label: Existing requests
+      options:
+        - label: I searched existing issues and discussions for a similar request.
+          required: true

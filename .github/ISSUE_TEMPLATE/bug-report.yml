@@ -1,0 +1,92 @@
+name: "🐛 Bug Report"
+description: "Report a reproducible non-security defect"
+title: "🐛 [BUG]: "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug.
+
+        Do not include secrets, credentials, personal data, or unredacted logs. If this may be a security vulnerability, do not continue here; use [private vulnerability reporting](https://github.com/novaferrydianto/devsecops-with-github-actions-end-to-end-nodejs-project/security/advisories/new).
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Select the component where the defect occurs.
+      options:
+        - Application
+        - CI/CD or GitHub Actions
+        - Container or local runtime
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_behavior
+    attributes:
+      label: Current behavior
+      description: Describe what happened without including sensitive data.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest repeatable sequence and sanitized inputs.
+      placeholder: |
+        1. Run ...
+        2. Configure ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: Describe the expected result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include relevant OS, Node.js, container engine, and commit/version details.
+      placeholder: |
+        - Commit/version:
+        - OS:
+        - Node.js:
+        - Docker/Podman:
+    validations:
+      required: true
+
+  - type: textarea
+    id: sanitized_logs
+    attributes:
+      label: Sanitized logs
+      description: Optional. Remove tokens, credentials, personal data, internal URLs, and other sensitive values.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety_acknowledgement
+    attributes:
+      label: Safety acknowledgement
+      options:
+        - label: I confirmed this is not a security vulnerability and removed sensitive data from this report.
+          required: true
+
+  - type: checkboxes
+    id: duplicate_check
+    attributes:
+      label: Existing issues
+      options:
+        - label: I searched existing issues for the same defect.
+          required: true

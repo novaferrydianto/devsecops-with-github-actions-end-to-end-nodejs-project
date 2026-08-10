@@ -1,0 +1,404 @@
+name: Pull Request Policy
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-policy:
+    name: pr-policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+
+    # Single source of truth for every step below, so no summary can state a
+    # governance model the policy did not actually apply. This repository has one
+    # maintainer, so an independent approver cannot exist; switch to `four-eyes`
+    # the moment a second trusted reviewer does — that is the only edit needed.
+    env:
+      PR_POLICY_GOVERNANCE_MODE: solo
+
+    steps:
+      - name: Harden the runner (GitHub API egress only)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+
+      - name: Record Dependabot template exemption
+        if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+        shell: bash
+        run: |
+          {
+            echo "## PR policy"
+            echo
+            echo "✅ Dependabot PR-template exemption applied."
+            echo
+            echo "Exception governance model: **${PR_POLICY_GOVERNANCE_MODE}**"
+            echo
+            echo "Dependency-review and CI security checks remain enforced for this bot-authored change; CODEOWNERS remains ownership metadata and is not an approval gate."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce high-risk pull-request policy
+        if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          PR_BODY_FILE="$RUNNER_TEMP/pr-body.md"
+          CHANGED_FILES_JSON="$RUNNER_TEMP/pr-files-pages.json"
+
+          # Fetch untrusted PR data as data files. Never interpolate it into shell
+          # commands, source it, or evaluate it.
+          gh api "repos/$REPO/pulls/$PR_NUMBER" \
+            --jq '.body // ""' > "$PR_BODY_FILE"
+          gh api "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" \
+            --paginate \
+            --slurp > "$CHANGED_FILES_JSON"
+
+          python3 - "$PR_BODY_FILE" "$CHANGED_FILES_JSON" <<'PY'
+          import datetime as dt
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import PurePosixPath
+
+
+          body_path, files_path = sys.argv[1:3]
+          with open(body_path, encoding="utf-8") as handle:
+              body = handle.read()
+          with open(files_path, encoding="utf-8") as handle:
+              pages = json.load(handle)
+
+          if not isinstance(pages, list):
+              raise SystemExit("GitHub files API returned an unexpected document.")
+
+          # `gh api --paginate --slurp` returns an array of page arrays. Accept a
+          # single unslurp-like page defensively without trusting filename text.
+          if pages and all(isinstance(page, list) for page in pages):
+              entries = [entry for page in pages for entry in page]
+          elif all(isinstance(entry, dict) for entry in pages):
+              entries = pages
+          else:
+              raise SystemExit("GitHub files API returned an unexpected page shape.")
+
+          filenames = []
+          for entry in entries:
+              filename = entry.get("filename") if isinstance(entry, dict) else None
+              if not isinstance(filename, str):
+                  raise SystemExit("GitHub files API returned an invalid filename.")
+              filenames.append(filename)
+
+
+          SECURITY_SCRIPT_KEYWORDS = re.compile(
+              r"(?:security|secure|governance|policy|compliance|license|scan|"
+              r"secret|sign|attest|sbom|supply[-_.]?chain|release|deploy|"
+              r"promote|rollback|incident|baseline)",
+              re.IGNORECASE,
+          )
+
+
+          # Directories whose contents govern a security gate or guide privileged
+          # agents. Agent rules are advisory rather than enforcement, but a
+          # malicious rule can still steer edits around a gate, so changes demand
+          # the full attestation even when the diff looks cosmetic. Keep the
+          # legacy path protected to prevent silent reintroduction.
+          HIGH_RISK_PREFIXES = (
+              ".agent/",
+              ".agents/",
+              ".antigravity/",
+              ".github/",
+              ".zap/",
+              "_agents/",
+          )
+
+          # Configuration that sets scanner scope, local hook coverage, or what
+          # enters the image build context. `.gitignore` is deliberately excluded:
+          # gitleaks, TruffleHog, and push protection each block a committed secret
+          # independently, so it does not gate a control on its own and adding it
+          # would only dilute this list with routine churn.
+          HIGH_RISK_BASENAMES = frozenset({
+              ".dockerignore",
+              ".pre-commit-config.yaml",
+              "agents.md",
+              "claude.md",
+              "gemini.md",
+              "security.md",
+              "sonar-project.properties",
+          })
+
+
+          def is_high_risk(filename: str) -> bool:
+              path = PurePosixPath(filename)
+              normalized = path.as_posix()
+              basename = path.name
+              basename_lower = basename.lower()
+
+              if normalized.startswith(HIGH_RISK_PREFIXES):
+                  return True
+              if basename_lower in HIGH_RISK_BASENAMES:
+                  return True
+              if basename_lower.startswith("dockerfile"):
+                  return True
+              if re.fullmatch(r"package[^/]*\.json", basename, re.IGNORECASE):
+                  return True
+              if basename_lower.startswith(".trivyignore"):
+                  return True
+              if normalized.startswith("scripts/") and SECURITY_SCRIPT_KEYWORDS.search(normalized):
+                  return True
+              return False
+
+
+          high_risk_files = [name for name in filenames if is_high_risk(name)]
+          summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+
+          if not high_risk_files:
+              with open(summary_path, "a", encoding="utf-8") as summary:
+                  summary.write("## PR policy\n\n")
+                  summary.write("PASS: Low-risk path set; strict PR-template fields are not required.\n")
+              print("No high-risk paths changed; policy check passed.")
+              raise SystemExit(0)
+
+          # Remove template comments before checking fields. The remaining text is
+          # still untrusted data and is never executed or emitted back into logs.
+          cleaned_body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+          lines = cleaned_body.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+          field_start = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*")
+          heading = re.compile(r"^\s*#{1,6}\s+")
+          # A checkbox also terminates a field value. Without this, any field that
+          # is followed by attestation checkboxes absorbs their text, is therefore
+          # never empty, and its "must be completed" check silently stops working.
+          checkbox_start = re.compile(r"^\s*-\s*\[[ xX]\]")
+
+
+          def get_field(label: str) -> str:
+              pattern = re.compile(
+                  rf"^\s*-\s+\*\*{re.escape(label)}:\*\*\s*(.*)$",
+                  re.IGNORECASE,
+              )
+              for index, line in enumerate(lines):
+                  match = pattern.match(line)
+                  if not match:
+                      continue
+                  value_lines = [match.group(1)]
+                  for following in lines[index + 1 :]:
+                      if (
+                          heading.match(following)
+                          or field_start.match(following)
+                          or checkbox_start.match(following)
+                      ):
+                          break
+                      value_lines.append(following)
+                  return "\n".join(value_lines).strip()
+              return ""
+
+
+          PLACEHOLDERS = {
+              "",
+              "-",
+              "n/a",
+              "na",
+              "none",
+              "not applicable",
+              "tbd",
+              "todo",
+              "pending",
+              "fixes #",
+          }
+
+
+          def normalized(value: str) -> str:
+              value = re.sub(r"[`*_>#]", " ", value)
+              value = re.sub(r"\s+", " ", value).strip().lower()
+              return value.strip(" :-")
+
+
+          def is_meaningful(value: str) -> bool:
+              compact = normalized(value)
+              if compact in PLACEHOLDERS:
+                  return False
+              if re.fullmatch(r"<[^>]+>", compact):
+                  return False
+              return bool(re.search(r"[a-z0-9]", compact, re.IGNORECASE))
+
+
+          # Governance model for the security-exception path. `four-eyes` demands a
+          # distinct risk owner and approver. `solo` accepts one identified owner,
+          # because a single-maintainer repository cannot produce a second person
+          # and demanding two handles only invites a fabricated one. That
+          # relaxation is compensated by the exception-lifetime cap below: an
+          # acceptance no independent reviewer ever saw must not become permanent.
+          GOVERNANCE_MODE = os.environ.get("PR_POLICY_GOVERNANCE_MODE", "solo").strip().lower()
+          if GOVERNANCE_MODE not in {"solo", "four-eyes"}:
+              raise SystemExit(f"Unsupported PR_POLICY_GOVERNANCE_MODE: {GOVERNANCE_MODE!r}")
+          MAX_EXCEPTION_DAYS = 90
+
+          errors = []
+          required_fields = [
+              "Environment",
+              "Commands executed",
+              "Result",
+              "CI run / artifact / report links",
+              "Risk level",
+              "Affected users/services/data",
+              "Blast radius and worst credible failure",
+              "Downtime expected",
+              "Migration or backward-compatibility impact",
+              "Rollout plan",
+              "Signals/dashboards/logs used to verify the change",
+              "Alerts and rollback trigger",
+              "SLO/error-budget impact",
+              "Rollback steps",
+              "Estimated recovery time",
+              "Post-rollback validation",
+          ]
+
+          values = {label: get_field(label) for label in required_fields}
+          for label, value in values.items():
+              if not is_meaningful(value):
+                  errors.append(f"Complete the `{label}` field with non-placeholder evidence.")
+
+          ci_evidence = values["CI run / artifact / report links"]
+          if is_meaningful(ci_evidence) and not re.search(r"https://[^\s)>]+", ci_evidence):
+              errors.append("`CI run / artifact / report links` must contain a sanitized HTTPS evidence link.")
+
+          checkbox_texts = [
+              "Relevant linting, tests, and security checks pass.",
+              "Evidence above is sanitized and contains no secrets, credentials, or sensitive data.",
+              "No hardcoded secrets, credentials, or unnecessary new permissions are introduced.",
+              "New/updated dependencies, actions, and images are immutable or lockfile-pinned where supported.",
+              "Relevant SAST, SCA, secret, IaC, container, and/or DAST results were reviewed.",
+              "High/Critical findings are remediated, or a time-bound exception is documented below.",
+          ]
+          checked_lines = []
+          for line in lines:
+              match = re.match(r"^\s*-\s*\[[xX]\]\s*(.+?)\s*$", line)
+              if match:
+                  checked_lines.append(normalized(match.group(1)))
+
+          for checkbox in checkbox_texts:
+              if normalized(checkbox) not in checked_lines:
+                  errors.append(f"Check the required attestation: `{checkbox}`")
+
+          exception_fields = {
+              "finding": get_field("Finding / CVE / policy"),
+              "owner": get_field("Risk owner and approver"),
+              "justification": get_field("Business justification"),
+              "controls": get_field("Compensating controls"),
+              "expiry": get_field("Expiry date (YYYY-MM-DD)"),
+              "tracking": get_field("Tracking issue"),
+          }
+
+          if normalized(exception_fields["finding"]) == "n/a":
+              for key, value in exception_fields.items():
+                  if key != "finding" and value and normalized(value) != "n/a":
+                      errors.append("When the security exception is `N/A`, leave other exception fields blank or set them to `N/A`.")
+                      break
+          else:
+              exception_labels = {
+                  "finding": "Finding / CVE / policy",
+                  "owner": "Risk owner and approver",
+                  "justification": "Business justification",
+                  "controls": "Compensating controls",
+                  "expiry": "Expiry date (YYYY-MM-DD)",
+                  "tracking": "Tracking issue",
+              }
+              for key, label in exception_labels.items():
+                  if not is_meaningful(exception_fields[key]):
+                      errors.append(f"Complete exception field `{label}`, or set `Finding / CVE / policy` to `N/A`.")
+
+              owner_value = exception_fields["owner"]
+              # Treat a risk-owner mention as a standalone token: it must start the
+              # field or follow whitespace. This fail-closed boundary rejects every
+              # email local-part form, including `owner+@localhost`, without trying
+              # to maintain a partial list of RFC email punctuation. The trailing
+              # guard keeps `@alice.` (sentence punctuation) valid while rejecting
+              # domains, bot suffixes, team paths, and partial login matches.
+              # GitHub logins contain 1-39 alphanumerics or single hyphens and never
+              # start, end, or contain consecutive hyphens.
+              MENTION_RE = re.compile(
+                  r"(?<!\S)"
+                  r"@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)"
+                  r"(?=$|\s|[,;:!?)]|\.(?![A-Za-z0-9.]))"
+              )
+              # GitHub logins are case-insensitive, so fold case before counting.
+              # Without this, "@Alice" and "@alice" look like two separate people.
+              handles = {
+                  handle.lower()
+                  for handle in MENTION_RE.findall(owner_value)
+                  if "--" not in handle
+              }
+              # This is syntactic extraction, not account resolution: it cannot
+              # prove a handle exists, that it belongs to a collaborator, or that
+              # two handles are two humans. It only removes the trivially forgeable
+              # forms. There is deliberately no free-text fallback either — the old
+              # `owner:`/`approver:` branch accepted "owner: Alice" with no handle,
+              # and "owner: Alice; approver: Alice" — one person twice — as an
+              # independent review. Real independence is enforced by the branch
+              # ruleset, not by this text field.
+              required_handles = 1 if GOVERNANCE_MODE == "solo" else 2
+              if is_meaningful(owner_value) and len(handles) < required_handles:
+                  if required_handles == 1:
+                      errors.append("`Risk owner and approver` must name the accountable risk owner with a GitHub @handle.")
+                  else:
+                      errors.append("`Risk owner and approver` must name two distinct GitHub @handles: the risk owner and an independent approver.")
+
+              expiry_value = exception_fields["expiry"].strip()
+              try:
+                  expiry = dt.date.fromisoformat(expiry_value)
+                  if expiry <= dt.date.today():
+                      errors.append("Security exception expiry must be a future YYYY-MM-DD date.")
+                  elif (expiry - dt.date.today()).days > MAX_EXCEPTION_DAYS:
+                      errors.append(
+                          f"Security exception expiry must be within {MAX_EXCEPTION_DAYS} days; "
+                          "renew it through a deliberate re-review instead of setting a distant date."
+                      )
+              except ValueError:
+                  if is_meaningful(expiry_value):
+                      errors.append("Security exception expiry must use exact YYYY-MM-DD format.")
+
+              tracking_value = exception_fields["tracking"]
+              tracking_pattern = re.compile(
+                  r"(?:^|\s)#\d+\b|https://github\.com/[^\s/]+/[^\s/]+/issues/\d+\b",
+                  re.IGNORECASE,
+              )
+              if is_meaningful(tracking_value) and not tracking_pattern.search(tracking_value):
+                  errors.append("`Tracking issue` must reference `#NUMBER` or a GitHub issue URL.")
+
+          with open(summary_path, "a", encoding="utf-8") as summary:
+              summary.write("## PR policy\n\n")
+              summary.write(f"High-risk files changed: **{len(high_risk_files)}**\n\n")
+              # Record which governance model judged this PR, so the evidence is
+              # not silently reinterpreted if the mode changes later.
+              summary.write(f"Exception governance model: **{GOVERNANCE_MODE}**\n\n")
+              if errors:
+                  summary.write("FAIL: Required PR-template policy failed:\n\n")
+                  for error in errors:
+                      summary.write(f"- {error}\n")
+              else:
+                  summary.write("PASS: Required validation, risk, observability, rollback, security, and exception evidence is complete.\n")
+
+          if errors:
+              print(f"::error title=PR policy failed::{len(errors)} required template control(s) are incomplete.")
+              raise SystemExit(1)
+
+          print("High-risk PR template policy passed.")
+          PY

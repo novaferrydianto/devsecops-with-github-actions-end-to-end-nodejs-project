@@ -1,7 +1,8 @@
 ## 📝 Description
-Fixes #
+- **Related issue/change:** Fixes #
+- **Why this change is needed:**
 
-<!-- Summarize the changes and the rationale behind them -->
+<!-- Summarize the change, its rationale, and what is intentionally out of scope. -->
 
 ## 🎯 Type of Change
 - [ ] ✨ Feat (New feature)
@@ -12,34 +13,46 @@ Fixes #
 - [ ] 📖 Docs (Documentation changes)
 
 ## 🔍 Proposed Changes
-- [ ] 
+-
 
-## 🛡️ DevSecOps & Quality Checklist
-- [ ] **Linting & Formatting**: Code passes pre-commit / style guide rules.
-- [ ] **Security Scanning**: No high/critical vulnerabilities found (`npm audit`, Trivy/Snyk/SonarQube).
-- [ ] **Secrets**: No hardcoded secrets, API keys, or credentials included.
-- [ ] **Tests**: `npm test` passed successfully.
-- [ ] **Documentation**: Updated `README.md` or internal docs if necessary.
+## 🧪 Validation Evidence
+- **Environment:** <!-- e.g. Node.js 24, Ubuntu runner, rootless Podman -->
+- **Commands executed:**
+- **Result:**
+- **CI run / artifact / report links:**
+- [ ] Relevant linting, tests, and security checks pass.
+- [ ] Evidence above is sanitized and contains no secrets, credentials, or sensitive data.
 
-## 🧪 How Has This Been Tested?
-- **Test Environment**: [e.g., Local Node.js v24, Docker/Podman container]
-- **Test Command**: `npm test` or `npm run cover`
-- **Result**: [Attach screenshots, test summary, or logs if relevant]
+## 🛡️ Security & Supply-Chain Review
+- [ ] No hardcoded secrets, credentials, or unnecessary new permissions are introduced.
+- [ ] New/updated dependencies, actions, and images are immutable or lockfile-pinned where supported.
+- [ ] Relevant SAST, SCA, secret, IaC, container, and/or DAST results were reviewed.
+- [ ] High/Critical findings are remediated, or a time-bound exception is documented below.
 
-## 📸 Screenshots / Logs (Optional)
+### Security Exception <!-- Write "N/A" when no exception is needed. -->
+- **Finding / CVE / policy:**
+- **Risk owner and approver:**
+- **Business justification:**
+- **Compensating controls:**
+- **Expiry date (YYYY-MM-DD):**
+- **Tracking issue:**
 
-## 🚩 Risk Assessment
-- **Downtime**: [Yes/No]
-- **Migration Required**: [Yes/No]
-- **Rollback Plan**:
-```bash
-# Add rollback steps here if applicable
-```
+## 🚩 Risk, Blast Radius & Delivery
+- **Risk level:** <!-- Low / Medium / High -->
+- **Affected users/services/data:**
+- **Blast radius and worst credible failure:**
+- **Downtime expected:** <!-- Yes / No; explain -->
+- **Migration or backward-compatibility impact:**
+- **Rollout plan:**
 
-<!-- 
-GUIDANCE FOR AUTHOR:
-Benefits of this template:
-1. Standardized PR structure for easier review.
-2. Security checklist ensures vulnerability checks before merge.
-3. Clear audit trail and rollback plan (SRE Best Practice).
--->
+## 📈 Observability & SLO
+- **Signals/dashboards/logs used to verify the change:**
+- **Alerts and rollback trigger:**
+- **SLO/error-budget impact:**
+
+## ↩️ Rollback & Recovery
+- **Rollback steps:**
+- **Estimated recovery time:**
+- **Post-rollback validation:**
+
+## 📸 Additional Sanitized Evidence (Optional)

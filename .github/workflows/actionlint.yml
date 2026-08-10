@@ -3,13 +3,8 @@ name: 🚀 Lint Workflows (actionlint)
 on:
   push:
     branches: [master]
-    paths:
-      - '.github/workflows/**.yml'
-      - '.github/workflows/**.yaml'
   pull_request:
-    paths:
-      - '.github/workflows/**.yml'
-      - '.github/workflows/**.yaml'
+    branches: [master]
 
 # ✅ SRE Best Practice: Hemat antrean runner dengan membatalkan proses lama
 concurrency:
@@ -22,33 +17,50 @@ permissions:
 
 jobs:
   actionlint:
-    runs-on: ubuntu-latest
-    name: 🧩 Check YAML Quality
+    runs-on: ubuntu-24.04
+    # Keep this name stable: repository rulesets can require this exact check.
+    name: actionlint
     timeout-minutes: 5
     permissions:
       contents: read
       checks: write
     steps:
       # ✅ Hardened: SHA Pinning untuk checkout
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             github.com:443
-            raw.githubusercontent.com:443
 
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
         
-      # ✅ Hardened & FIXED: Menggunakan action resmi reviewdog/action-actionlint
+      # ✅ Hardened: immutable StepSecurity-maintained actionlint wrapper
       - name: Run Actionlint
         uses: step-security/action-actionlint@c3aa382d371c6b05513ae5907d4f77713e21813c # v1.72.0
         with:
+          # `github-check` supports both pull_request and push events, so this
+          # job exposes one stable required-check context on every protected PR.
+          reporter: github-check
+          tool_name: actionlint-reviewdog
+          filter_mode: nofilter
           # reviewdog defaults `fail_level: none`, which means "always exit 0" —
           # findings would only ever appear as annotations and this job would
           # stay green with broken workflows. Make it an actual gate.
           fail_level: error
+
+      # actionlint proves the workflow YAML is well-formed. It cannot prove that
+      # the policy embedded in pr-policy.yml still decides correctly — a weakened
+      # path classifier or a forgeable identity check is valid YAML. This runs the
+      # real embedded program against the real PR template and asserts its
+      # verdicts. Standard library only, so it needs no install and no addition to
+      # the egress allowlist above.
+      - name: Verify PR policy semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test-pr-policy.py

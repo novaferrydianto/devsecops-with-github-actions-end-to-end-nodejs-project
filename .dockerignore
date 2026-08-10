@@ -53,6 +53,16 @@ snyk-report.json
 .vscode/
 .idea/
 
+# Agent/assistant configuration — never needed in a build context
+.antigravity/
+.agent/
+.agents/
+_agents/
+.gemini/
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+
 # ============================
 # OS / Editor trash
 # ============================

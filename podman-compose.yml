@@ -20,6 +20,13 @@ services:
     # Rootless-friendly
     security_opt:
       - label=disable
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
 
     tty: true
     stdin_open: true
