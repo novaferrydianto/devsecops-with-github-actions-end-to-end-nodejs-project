@@ -195,8 +195,8 @@ for path in HIGH_RISK_PATHS:
 for path in LOW_RISK_PATHS:
     if is_high_risk(path):
         fail(f"expected low-risk, classified high: {path}")
-if not any(message.startswith("expected high-risk") or
-           message.startswith("expected low-risk") for message in failures):
+if not any(message.startswith(("expected high-risk", "expected low-risk"))
+           for message in failures):
     ok(f"classifier agrees on {len(HIGH_RISK_PATHS)} high-risk "
        f"and {len(LOW_RISK_PATHS)} low-risk paths")
 
