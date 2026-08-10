@@ -85,7 +85,7 @@ describe('🚀 Integration Test: app.js', () => {
 
     describe('🔐 TLS configuration', () => {
         it('should keep local development on HTTP when TLS is not configured', () => {
-            expect(loadTlsOptions({})).to.equal(undefined);
+            expect(loadTlsOptions({})).to.be.undefined;
         });
 
         it('should fail closed when only one TLS path is configured', () => {

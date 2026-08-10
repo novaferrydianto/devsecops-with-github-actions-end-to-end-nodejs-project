@@ -139,4 +139,4 @@ async function makeover() {
   }
 }
 
-makeover();
+await makeover();

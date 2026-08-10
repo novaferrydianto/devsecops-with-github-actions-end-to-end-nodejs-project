@@ -41,7 +41,7 @@ export function isAllowedLicense(packagePath, license) {
   // closed until they are reviewed and added deliberately.
   const orExpression = normalized.match(/^\(([^()]+)\)$/);
   if (orExpression) {
-    const alternatives = orExpression[1].split(/\s+OR\s+/);
+    const alternatives = orExpression[1].split(' OR ');
     return alternatives.length > 1
       && alternatives.some((candidate) => allowedLicenses.has(normalizeLicense(candidate)));
   }
