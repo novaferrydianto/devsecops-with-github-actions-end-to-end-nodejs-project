@@ -69,7 +69,7 @@ jobs:
       sonar_gate: ${{ steps.sonar.outcome }}
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -149,7 +149,7 @@ jobs:
       snyk_gate: ${{ steps.snyk_gate.outcome }}
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -386,7 +386,7 @@ jobs:
       security-events: write
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -441,7 +441,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Upload SARIF to Security Tab
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         if: >-
           hashFiles('trivy-results.sarif') != '' &&
           github.actor != 'dependabot[bot]' &&
@@ -545,7 +545,7 @@ jobs:
         #     it against .../sigstore/cosign/<ver>/release/release-cosign.pub.
         #   production.cloudfront.docker.com — Docker Hub's AWS CloudFront blob
         #     CDN, alongside the older Cloudflare host. Both must be reachable.
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -610,7 +610,7 @@ jobs:
 
       # Install every third-party tool before exposing the registry credential.
       - name: Login to Registry
-        uses: step-security/docker-login-action@bd6978fd4ef9a5f78130095b298b8a721afcb0d8 # v4.5.1
+        uses: step-security/docker-login-action@8c7b695d8738c5699a679ff5254baf0f19f20a94 # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.REGISTRY_USERNAME }}
@@ -1060,7 +1060,7 @@ jobs:
       contents: read
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1188,7 +1188,7 @@ jobs:
       contents: read
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
