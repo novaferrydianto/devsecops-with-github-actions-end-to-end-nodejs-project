@@ -44,7 +44,7 @@ jobs:
     steps:
     # ✅ REMEDIATION 2: Upgraded to v5 (Native Node 24 support)
     - name: Harden the runner (block unapproved egress)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: block
         allowed-endpoints: >
@@ -61,7 +61,7 @@ jobs:
         persist-credentials: false
       
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+      uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
@@ -69,6 +69,6 @@ jobs:
 
     # ✅ REMEDIATION 3: Upgraded to CodeQL Action v4
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+      uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
       with:
         category: "/language:${{matrix.language}}"
