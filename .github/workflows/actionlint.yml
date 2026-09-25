@@ -27,7 +27,7 @@ jobs:
     steps:
       # ✅ Hardened: SHA Pinning untuk checkout
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -41,7 +41,7 @@ jobs:
         
       # ✅ Hardened: immutable StepSecurity-maintained actionlint wrapper
       - name: Run Actionlint
-        uses: step-security/action-actionlint@c3aa382d371c6b05513ae5907d4f77713e21813c # v1.72.0
+        uses: step-security/action-actionlint@b90a9ddb65b752bc6b6888a2f30a4941d9ff62e5 # v1.73.1
         with:
           # `github-check` supports both pull_request and push events, so this
           # job exposes one stable required-check context on every protected PR.
