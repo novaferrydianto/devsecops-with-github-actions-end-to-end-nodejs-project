@@ -37,5 +37,22 @@ We are interested in vulnerabilities regarding:
 * Container Hardening (Docker/Chainguard configurations).
 * Critical Supply Chain integrity.
 
+## Application hardening (current)
+
+Controls implemented in the application and container surface today:
+
+* **Location allowlist validation** before OpenWeather API calls (`validateLocation` in `fetch-weather.js`)
+* **HTTP method allowlist**: `GET` / `HEAD` only (non-allowlisted methods receive `405` with `Allow`)
+* **Request path normalization** (`normalizeRequestPath`): strip query string, collapse `//`, reject `..` / NUL / bad percent-encoding with `400`, overlong URLs with `414`
+* **Server timeouts** via `HEADERS_TIMEOUT_MS` / `REQUEST_TIMEOUT_MS` / `KEEP_ALIVE_TIMEOUT_MS` (defaults 15s / 30s / 5s)
+* **Optional `WEATHER_API_TOKEN`** for `GET /weather` (`Authorization: Bearer` or `X-API-Key`, timing-safe compare); `/health` stays open. Leave unset for local DAST / ZAP open scans
+* **In-app fixed-window rate limit** (`RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`); `/health` is exempt. `0` disables
+* **Security headers** on every response: CSP, HSTS, COOP/COEP/CORP, `X-Content-Type-Options: nosniff`, frame deny, `Referrer-Policy: no-referrer`, and related defaults
+* **Configurable bind host** via `HOST` / `BIND_ADDRESS` (default `0.0.0.0`)
+* **Optional TLS** when both `TLS_CERT_PATH` and `TLS_KEY_PATH` are set together; minimum TLSv1.2
+* **Minimal production dependency surface** (`command-line-args` only) with Node native `fetch`
+* **Multi-stage Chainguard image**, non-root runtime, pruned deps, tight `.dockerignore`
+* See **`.env.example`** for the full variable template (copy to `.env` locally; never commit real secrets)
+
 ---
 *Thank you for helping keep this project secure!*

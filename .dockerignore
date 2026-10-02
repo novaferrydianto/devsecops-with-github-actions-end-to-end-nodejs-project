@@ -26,8 +26,11 @@ coverage
 .next
 .nuxt
 .vuepress/dist
+xunit.xml
 
 # Testing artifacts
+test/
+test-data/
 __tests__/
 reports/
 logs/
@@ -42,6 +45,7 @@ sbom.json
 trivy-report.json
 snyk-report.json
 *.sarif
+.zap/
 
 # ============================
 # Git & CI/CD
@@ -64,6 +68,16 @@ GEMINI.md
 CLAUDE.md
 
 # ============================
+# Docs / markdown / legal (not needed at runtime)
+# ============================
+docs/
+*.md
+CHANGELOG
+CHANGELOG.md
+LICENSE
+LICENSE.md
+
+# ============================
 # OS / Editor trash
 # ============================
 .DS_Store
@@ -77,6 +91,7 @@ CLAUDE.md
 *.crt
 *.p12
 
-# Docker / Compose
+# Docker / Compose / dev image
 docker-compose*
 podman-compose*
+Dockerfile.dev

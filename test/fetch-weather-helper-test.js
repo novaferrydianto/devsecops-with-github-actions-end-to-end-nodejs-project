@@ -1,7 +1,25 @@
 import { expect } from "chai";
-import { kelvinToCelsius, getVolume } from "../fetch-weather.js";
+import { kelvinToCelsius, getVolume, validateLocation } from "../fetch-weather.js";
 
 describe("Weather Helper Functions", function () {
+  describe("validateLocation", () => {
+    it("should accept common city names", () => {
+      expect(validateLocation("London")).to.equal("London");
+      expect(validateLocation("  New York  ")).to.equal("New York");
+      expect(validateLocation("São Paulo")).to.equal("São Paulo");
+      expect(validateLocation("St. Louis")).to.equal("St. Louis");
+    });
+
+    it("should reject empty, oversized, URL-like, and non-string values", () => {
+      expect(() => validateLocation("")).to.throw(Error, /Invalid location/);
+      expect(() => validateLocation("   ")).to.throw(Error, /Invalid location/);
+      expect(() => validateLocation(null)).to.throw(Error, /Invalid location/);
+      expect(() => validateLocation("http://evil.com")).to.throw(Error, /Invalid location/);
+      expect(() => validateLocation("a".repeat(81))).to.throw(Error, /Invalid location/);
+      expect(() => validateLocation("user@host")).to.throw(Error, /Invalid location/);
+    });
+  });
+
   describe("kelvinToCelsius", () => {
     it("should correctly convert Kelvin to Celsius", () => {
       expect(kelvinToCelsius(300)).to.equal(27);

@@ -14,14 +14,64 @@ if (!APP_ID) {
   throw new Error("CRITICAL STARTUP ERROR: OPENWEATHER_API_KEY environment variable is missing.");
 }
 
+/** Max accepted location length after trim. */
+const LOCATION_MAX_LEN = 80;
+
+/**
+ * Validate and sanitize a weather location string before it is used in API URLs.
+ * Allowlist: Unicode letters/marks, digits, spaces, comma, period, hyphen, apostrophe.
+ * @param {unknown} location
+ * @returns {string} trimmed safe location
+ * @throws {Error} when the location is invalid
+ */
+export function validateLocation(location) {
+  if (typeof location !== 'string') {
+    throw new Error('Invalid location: must be a non-empty string');
+  }
+
+  const trimmed = location.trim();
+  if (!trimmed) {
+    throw new Error('Invalid location: must be a non-empty string');
+  }
+
+  if (trimmed.length > LOCATION_MAX_LEN) {
+    throw new Error(`Invalid location: exceeds maximum length of ${LOCATION_MAX_LEN}`);
+  }
+
+  // Reject obvious injection / URL / control patterns early
+  if (
+    /[\u0000-\u001F\u007F]/.test(trimmed) ||
+    /https?:\/\//i.test(trimmed) ||
+    /\/\//.test(trimmed) ||
+    /@/.test(trimmed)
+  ) {
+    throw new Error('Invalid location: contains disallowed characters or patterns');
+  }
+
+  // Practical city-name allowlist (letters with accents, digits, space, comma, period, hyphen, apostrophe)
+  if (!/^[\p{L}\p{M}0-9][\p{L}\p{M}0-9 .,'-]{0,79}$/u.test(trimmed)) {
+    throw new Error('Invalid location: only letters, digits, spaces, comma, period, hyphen, and apostrophe are allowed');
+  }
+
+  return trimmed;
+}
+
 /**
  * Fetch and process weather data
  * @param {string} location
  * @returns {Promise<Object>}
  */
 export async function fetchWeather(location) {
-  const fetchFn = global.fetch || (await import("node-fetch")).default;
-  const safeLocation = encodeURIComponent(location);
+  const validated = validateLocation(location);
+  // Prefer globalThis.fetch (Node 18+); tests stub global.fetch / globalThis.fetch.
+  const fetchFn = globalThis.fetch ?? global.fetch;
+  if (typeof fetchFn !== "function") {
+    throw new Error(
+      "fetch is not available: use Node.js >= 18 or provide globalThis.fetch"
+    );
+  }
+  const safeLocation = encodeURIComponent(validated);
+  // Do not log this URL — it contains the API key
   const url = `https://api.openweathermap.org/data/2.5/weather?q=${safeLocation}&appid=${APP_ID}`;
 
   try {
