@@ -27,7 +27,6 @@
     "mocha": "^11.8.0",
     "mocha-sonarqube-reporter": "1.0.2",
     "mochawesome": "^8.0.1",
-    "nodemon": "^3.1.14",
     "rimraf": "^6.1.3",
     "sinon": "^22.1.0",
     "snyk-to-html": "^3.7.9",
@@ -63,13 +62,15 @@
     "statements": 70
   },
   "overrides": {
-    "brace-expansion": "5.0.9",
+    "brace-expansion": "5.0.12",
     "minimatch": "10.2.6",
     "serialize-javascript": "7.0.7",
     "uuid": "11.1.1",
+    "js-yaml": "5.4.1",
+    "qs": "6.16.0",
     "mocha": {
       "diff": "8.0.4",
-      "js-yaml": "5.2.2"
+      "js-yaml": "5.4.1"
     }
   }
 }
