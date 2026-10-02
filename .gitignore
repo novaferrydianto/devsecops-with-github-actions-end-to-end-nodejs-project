@@ -53,6 +53,7 @@ security-reports/
 .env
 .env.local
 .env.*.local
+!.env.example
 
 ### Cache / Lock Files ###
 .eslintcache

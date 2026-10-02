@@ -38,8 +38,8 @@ Source lives at the repo **root** (there is no `src/`):
 ## Conventions
 
 - **ESM everywhere.** Use `import`/`export` with explicit `.js` extensions. No `require`, no CommonJS.
-- **Env-driven config, never hardcoded secrets.** `OPENWEATHER_API_KEY` is **required** — `fetch-weather.js` throws at import time if it is missing. Other vars: `OPENWEATHER_TIMEOUT_MS` (default `10000`), `DEFAULT_LOCATION`, `PORT` (default `3000`), and `NODE_ENV`. Optional TLS requires `TLS_CERT_PATH` and `TLS_KEY_PATH` together and fails closed if only one is set. `.env` is gitignored; tests inject a dummy key via `cross-env`.
-- **Security headers** are set on every HTTP response in `startServer` (CSP, `X-Content-Type-Options`, HSTS, etc.). Keep them when touching the server.
+- **Env-driven config, never hardcoded secrets.** `OPENWEATHER_API_KEY` is **required** — `fetch-weather.js` throws at import time if it is missing. Other vars: `OPENWEATHER_TIMEOUT_MS` (default `10000`), `DEFAULT_LOCATION`, `PORT` (default `3000`), `HOST` / `BIND_ADDRESS`, `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`, optional `WEATHER_API_TOKEN` (Bearer or `X-API-Key` on `/weather`; unset keeps auth open for local DAST/ZAP), and `NODE_ENV`. Locations pass `validateLocation` before upstream calls. Optional TLS requires `TLS_CERT_PATH` and `TLS_KEY_PATH` together and fails closed if only one is set. Template: `.env.example` (tracked); real `.env` is gitignored. Tests inject a dummy key via `cross-env`.
+- **Security headers** are set on every HTTP response in `startServer` (CSP, `X-Content-Type-Options`, HSTS, COOP/COEP/CORP, frame deny, no-referrer, etc.). Keep them when touching the server.
 - `// NOSONAR` comments on `console.*` lines are intentional SonarCloud suppressions — leave them.
 - **Coverage is `c8`**, configured in the `c8` block of `package.json` (that block is authoritative). `test/mocha.opts` is a legacy leftover — don't rely on it.
 - Commit messages follow **Conventional Commits** (`ci:`, `fix(docker):`, `fix:` …), matching the existing history.

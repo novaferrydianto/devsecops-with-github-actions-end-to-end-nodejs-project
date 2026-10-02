@@ -21,8 +21,8 @@ COPY --chown=node:node package.json package-lock.json ./
 
 RUN npm ci --include=dev --ignore-scripts
 
-# ✅ FIX: Pastikan source code juga dimiliki oleh user node
-COPY --chown=node:node . .
+# Copy only runtime application sources (not tests/docs/CI)
+COPY --chown=node:node app.js fetch-weather.js prepared-for-the-weather.js ./
 
 # Sekarang npm prune tidak akan kena EACCES
 RUN npm prune --production
