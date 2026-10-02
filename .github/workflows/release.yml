@@ -52,7 +52,7 @@ jobs:
       trusted_run_url: ${{ steps.trust.outputs.trusted_run_url }}
     steps:
       - name: Harden the runner (deny-all egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -621,7 +621,7 @@ jobs:
       id-token: write
     steps:
       - name: Harden the runner (deny-all egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -805,7 +805,7 @@ jobs:
       deployments: read
     steps:
       - name: Harden the runner (deny-all egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1015,7 +1015,7 @@ jobs:
 
       - name: Create verified draft release
         id: draft_release
-        uses: step-security/action-gh-release@d2093dbdaf0c6507874908247e14bbc4dee6a72d # v3.0.1
+        uses: step-security/action-gh-release@44319d37c8b7966bf07f89f0cbf63408141446df # v3.0.3
         with:
           token: ${{ github.token }}
           tag_name: ${{ github.ref_name }}
