@@ -69,3 +69,5 @@ The pipeline is designed to **fail closed**. Before committing dependency or Doc
 
 - **`xunit.xml` and `coverage/` are generated artifacts.** `npm test` or `npm run cover` rewrites `xunit.xml`; both paths are gitignored.
 - Never commit `.env`, `*.pem`, `*.key`, `*.sig`, or `security-reports/` — all gitignored by design.
+
+- **Agent Governance & Rules:** Workspace agent rules and boundary definitions are tracked in [`.agents/rules/devsecops.md`](.agents/rules/devsecops.md) and documented in [`.agents/README.md`](.agents/README.md). Instructions in `CLAUDE.md` and workspace rules remain mutually aligned with the fail-closed security pipeline.
