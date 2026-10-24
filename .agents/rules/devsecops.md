@@ -1,3 +1,9 @@
+---
+title: DevSecOps Repository Rule
+description: Core DevSecOps principles, evidence hierarchy, supply-chain guardrails, and fail-closed gates for repository agents.
+always_on: true
+---
+
 # DevSecOps Repository Rule
 
 > **Activation:** register this workspace rule as **Always On** in Antigravity

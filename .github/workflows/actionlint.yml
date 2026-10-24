@@ -25,20 +25,31 @@ jobs:
       contents: read
       checks: write
     steps:
-      # ✅ Hardened: SHA Pinning untuk checkout
+      # Harden Runner first so checkout and all later steps run under egress block.
+      # Allowlist is minimal: only hosts proven required for clone + actionlint.
+      # Do not add broad wildcards (e.g. *.blob.core.windows.net) without a
+      # blocked-connection evidence from CI logs for a specific host.
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            rhysd.github.io:443
+            results.stepsecurity.io:443
 
+      # ✅ Hardened: SHA Pinning untuk checkout
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history so scripts/test-pr-policy.py can inspect base..head commit messages.
+          fetch-depth: 0
           persist-credentials: false
-        
+
       # ✅ Hardened: immutable StepSecurity-maintained actionlint wrapper
       - name: Run Actionlint
         uses: step-security/action-actionlint@c3aa382d371c6b05513ae5907d4f77713e21813c # v1.72.0
