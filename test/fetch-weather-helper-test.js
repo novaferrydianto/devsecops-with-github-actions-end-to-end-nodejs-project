@@ -14,7 +14,7 @@ describe("Weather Helper Functions", function () {
       expect(() => validateLocation("")).to.throw(Error, /Invalid location/);
       expect(() => validateLocation("   ")).to.throw(Error, /Invalid location/);
       expect(() => validateLocation(null)).to.throw(Error, /Invalid location/);
-      expect(() => validateLocation("http://evil.com")).to.throw(Error, /Invalid location/);
+      expect(() => validateLocation("https://evil.com")).to.throw(Error, /Invalid location/);
       expect(() => validateLocation("a".repeat(81))).to.throw(Error, /Invalid location/);
       expect(() => validateLocation("user@host")).to.throw(Error, /Invalid location/);
     });
