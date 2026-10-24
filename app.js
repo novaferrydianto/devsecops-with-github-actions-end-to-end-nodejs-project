@@ -123,8 +123,7 @@ function extractApiToken(req) {
   }
   const auth = req.headers.authorization;
   if (typeof auth === 'string') {
-    const match = /^Bearer\s+(.+)$/i.exec(auth.trim());
-    if (match?.[1]) return match[1].trim();
+    const trimmed = auth.trim(); if (trimmed.length > 7 && trimmed.slice(0, 7).toLowerCase() === "bearer ") { const token = trimmed.slice(7).trim(); if (token) return token; }
   }
   return null;
 }
