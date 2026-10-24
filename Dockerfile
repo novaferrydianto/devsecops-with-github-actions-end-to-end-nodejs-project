@@ -11,7 +11,7 @@
 # ":latest" tag regardless of which tag it came from, so bump PRs for this
 # stage may read as coming from ":latest" instead of ":latest-dev" -- still
 # correctly pins and updates by digest, just a less precise PR diff.
-FROM cgr.dev/chainguard/node@sha256:1bd1aa2a03ffd28fff8f99f1330bbf3080e03d5c76e4758572a403dd71baa9e8 AS builder
+FROM cgr.dev/chainguard/node@sha256:5d749aee9d2711dd89d757de7bfe2674a9f924a119f2b354f2227e2e4711ea9b AS builder
 
 # Set context ke user node sejak awal
 WORKDIR /app
@@ -21,8 +21,8 @@ COPY --chown=node:node package.json package-lock.json ./
 
 RUN npm ci --include=dev --ignore-scripts
 
-# ✅ FIX: Pastikan source code juga dimiliki oleh user node
-COPY --chown=node:node . .
+# Copy only runtime application sources (not tests/docs/CI)
+COPY --chown=node:node app.js fetch-weather.js prepared-for-the-weather.js ./
 
 # Sekarang npm prune tidak akan kena EACCES
 RUN npm prune --production
@@ -31,7 +31,7 @@ RUN npm prune --production
 # STAGE 2: Hardened Runtime
 # =================================================================
 # cgr.dev/chainguard/node:latest
-FROM cgr.dev/chainguard/node@sha256:8e1189525a80564e0df5cec59bc4aa5d859869e6e7c05b0a4290682fbd53563e
+FROM cgr.dev/chainguard/node@sha256:5d749aee9d2711dd89d757de7bfe2674a9f924a119f2b354f2227e2e4711ea9b
 
 WORKDIR /app
 
