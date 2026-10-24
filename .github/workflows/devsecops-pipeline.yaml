@@ -390,7 +390,9 @@ jobs:
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
+          # Exact Chainguard layer redirect observed blocked in run 40126303534.
           allowed-endpoints: >
+            9236a389bd48b984df91adc1bc924620.r2.cloudflarestorage.com:443
             api.github.com:443
             auth.docker.io:443
             cgr.dev:443
