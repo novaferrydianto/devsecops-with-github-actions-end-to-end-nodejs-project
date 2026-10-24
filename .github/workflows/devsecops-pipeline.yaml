@@ -407,7 +407,6 @@ jobs:
             release-assets.githubusercontent.com:443
             registry-1.docker.io:443
             registry.npmjs.org:443
-            *.r2.cloudflarestorage.com:443
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -535,12 +534,16 @@ jobs:
         #
         # Why each entry is here (comments cannot live inside the `>` block,
         # since a folded scalar would treat them as literal endpoint text):
-        #   *.actions.githubusercontent.com — the OIDC token is requested from
-        #     ACTIONS_ID_TOKEN_REQUEST_URL, a per-run pipelinesghubeus* host.
-        #     token.actions.githubusercontent.com is only the `iss` claim /
-        #     JWKS origin, NOT where the runner fetches the token. This wildcard
-        #     also covers the artifact results-receiver host.
-        #   raw.githubusercontent.com — cosign-installer bootstraps v3.0.6 and
+        #   *.actions.githubusercontent.com - OIDC/id-token jobs ONLY. GitHub
+        #     sets ACTIONS_ID_TOKEN_REQUEST_URL to a per-run host under this
+        #     suffix; a fixed token.actions.githubusercontent.com host is not
+        #     enough for the token request. Keep this wildcard scoped to jobs
+        #     with permissions.id-token: write - do not copy it onto other jobs.
+        #     token.actions.githubusercontent.com may still appear for issuer/JWKS.
+        #     Do NOT reintroduce *.blob.core.windows.net (or *.r2.cloudflarestorage.com).
+        #     If artifact download needs a host, add that exact host only after
+        #     CI shows a blocked-connection in StepSecurity insights.
+        #   raw.githubusercontent.com - cosign-installer bootstraps v3.0.6 and
         #     we request v2.6.4, so it downloads the desired binary and verifies
         #     it against .../sigstore/cosign/<ver>/release/release-cosign.pub.
         #   production.cloudfront.docker.com — Docker Hub's AWS CloudFront blob
@@ -555,7 +558,7 @@ jobs:
             release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
             *.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
+            token.actions.githubusercontent.com:443
             auth.docker.io:443
             index.docker.io:443
             registry-1.docker.io:443
@@ -1059,14 +1062,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Checkout is SHA-pinned and runs before network enforcement because
-      # github.com can rotate edge IPs during checkout. Harden Runner otherwise
-      # intermittently drops the new IP even though the domain is allowlisted.
-      - name: Checkout ZAP policy
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       - name: Harden the runner (block unapproved egress)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
@@ -1088,6 +1083,11 @@ jobs:
             registry-1.docker.io:443
             release-assets.githubusercontent.com:443
             tel.zaproxy.org:443
+
+      - name: Checkout ZAP policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download built image (no rebuild)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

@@ -61,8 +61,7 @@ jobs:
             objects.githubusercontent.com:443
             raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-            *.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
+            token.actions.githubusercontent.com:443
             auth.docker.io:443
             index.docker.io:443
             registry-1.docker.io:443
@@ -630,9 +629,8 @@ jobs:
             objects.githubusercontent.com:443
             raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-            token.actions.githubusercontent.com:443
             *.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
+            token.actions.githubusercontent.com:443
             fulcio.sigstore.dev:443
             rekor.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
@@ -816,8 +814,7 @@ jobs:
             release-assets.githubusercontent.com:443
             uploads.github.com:443
             uploads.githubusercontent.com:443
-            *.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
+            token.actions.githubusercontent.com:443
             rekor.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
 
