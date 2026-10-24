@@ -31,7 +31,7 @@ RUN npm prune --production
 # STAGE 2: Hardened Runtime
 # =================================================================
 # cgr.dev/chainguard/node:latest
-FROM cgr.dev/chainguard/node@sha256:5d749aee9d2711dd89d757de7bfe2674a9f924a119f2b354f2227e2e4711ea9b
+FROM cgr.dev/chainguard/node@sha256:88c4f6e6941bdd4fb9039d98ad05384e1bfe5693dd31ccc8eb2f0c8522bdb40e
 
 WORKDIR /app
 
