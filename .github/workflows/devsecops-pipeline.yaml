@@ -69,7 +69,7 @@ jobs:
       sonar_gate: ${{ steps.sonar.outcome }}
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -149,7 +149,7 @@ jobs:
       snyk_gate: ${{ steps.snyk_gate.outcome }}
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -386,7 +386,7 @@ jobs:
       security-events: write
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -548,7 +548,7 @@ jobs:
         #     it against .../sigstore/cosign/<ver>/release/release-cosign.pub.
         #   production.cloudfront.docker.com — Docker Hub's AWS CloudFront blob
         #     CDN, alongside the older Cloudflare host. Both must be reachable.
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1063,7 +1063,7 @@ jobs:
       contents: read
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1191,7 +1191,7 @@ jobs:
       contents: read
     steps:
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
