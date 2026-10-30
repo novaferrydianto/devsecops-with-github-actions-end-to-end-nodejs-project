@@ -30,7 +30,7 @@ jobs:
       # Do not add broad wildcards (e.g. *.blob.core.windows.net) without a
       # blocked-connection evidence from CI logs for a specific host.
       - name: Harden the runner (block unapproved egress)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -52,7 +52,7 @@ jobs:
 
       # ✅ Hardened: immutable StepSecurity-maintained actionlint wrapper
       - name: Run Actionlint
-        uses: step-security/action-actionlint@c3aa382d371c6b05513ae5907d4f77713e21813c # v1.72.0
+        uses: step-security/action-actionlint@b2b21b6e020989da8beae86d6c3a1291c46d45d5 # v1.76.0
         with:
           # `github-check` supports both pull_request and push events, so this
           # job exposes one stable required-check context on every protected PR.
