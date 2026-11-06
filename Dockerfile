@@ -11,7 +11,7 @@
 # ":latest" tag regardless of which tag it came from, so bump PRs for this
 # stage may read as coming from ":latest" instead of ":latest-dev" -- still
 # correctly pins and updates by digest, just a less precise PR diff.
-FROM cgr.dev/chainguard/node@sha256:5d749aee9d2711dd89d757de7bfe2674a9f924a119f2b354f2227e2e4711ea9b AS builder
+FROM cgr.dev/chainguard/node@sha256:23b71e5423b7267348e64207c88223f4388fb483aa38b7dbf6356da0d02cd1f8 AS builder
 
 # Set context ke user node sejak awal
 WORKDIR /app
@@ -31,7 +31,7 @@ RUN npm prune --production
 # STAGE 2: Hardened Runtime
 # =================================================================
 # cgr.dev/chainguard/node:latest
-FROM cgr.dev/chainguard/node@sha256:88c4f6e6941bdd4fb9039d98ad05384e1bfe5693dd31ccc8eb2f0c8522bdb40e
+FROM cgr.dev/chainguard/node@sha256:23b71e5423b7267348e64207c88223f4388fb483aa38b7dbf6356da0d02cd1f8
 
 WORKDIR /app
 
